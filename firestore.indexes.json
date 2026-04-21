@@ -96,6 +96,14 @@
         { "fieldPath": "studentId", "order": "ASCENDING" },
         { "fieldPath": "scheduledAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "students",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "photoArchived", "order": "ASCENDING" },
+        { "fieldPath": "enrollmentDate", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

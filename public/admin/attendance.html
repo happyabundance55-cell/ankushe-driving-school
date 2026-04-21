@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;font-family:inherit;padding:.58rem .85rem;box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);font-size:.9rem;font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light);color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+    .sig-canvas { width:100%;height:120px; }
+    .tab-bar { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.5rem;background:rgba(255,255,255,.75);border-radius:var(--radius) var(--radius) 0 0;padding:0 .5rem; }
+    .tab-btn { padding:.6rem 1.2rem;font-size:.9rem;font-weight:600;color:var(--text);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;font-family:inherit; }
+    .tab-btn.active { color:var(--primary);border-bottom-color:var(--primary); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+    .instr-day { background:rgba(255,255,255,.75);border:1px solid rgba(196,124,5,.22);border-radius:var(--radius);margin-bottom:.5rem;overflow:hidden; }
+    .instr-day-header { display:flex;align-items:center;gap:.75rem;padding:.6rem .9rem;background:rgba(255,255,255,.3); }
+    .instr-day-date { font-weight:700;font-size:.9rem;min-width:100px; }
+    .instr-day-body { padding:.5rem .9rem; }
+    .session-row { font-size:.85rem;padding:.3rem 0;border-bottom:1px solid var(--border); }
+    .session-row:last-child { border-bottom:none; }
+    .no-session { color:var(--text-muted);font-size:.85rem;padding:.35rem 0; }
+    @media print {
+      .print-attendance-header { display:block;text-align:center;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:2px solid #000; }
+      #mark-form-card,.tab-bar,#tab-records .filters,.no-print { display:none!important; }
+    }
+    .print-attendance-header { display:none; }
+
+    /* ── Custom Month Picker ── */
+    .month-picker-wrap { position:relative;display:inline-block; }
+    .month-picker-btn {
+      display:flex;align-items:center;gap:.5rem;
+      padding:.55rem .9rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+      background:var(--white);font-size:.9rem;font-family:inherit;color:var(--text);
+      cursor:pointer;white-space:nowrap;min-width:150px;
+      transition:border-color .15s;
+    }
+    .month-picker-btn:hover { border-color:var(--primary); }
+    .month-picker-btn .mp-arrow { margin-left:auto;color:var(--text-muted);font-size:.7rem; }
+    .month-picker-dropdown {
+      display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+      background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);
+      box-shadow:var(--shadow-md);padding:.75rem;min-width:260px;
+    }
+    .month-picker-dropdown.open { display:block; }
+    .mp-year-nav { display:flex;align-items:center;justify-content:space-between;margin-bottom:.65rem; }
+    .mp-year-nav button {
+      background:none;border:1px solid var(--border);border-radius:var(--radius-sm);
+      width:28px;height:28px;cursor:pointer;font-size:.9rem;color:var(--text);
+      display:flex;align-items:center;justify-content:center;
+      transition:background .12s;
+    }
+    .mp-year-nav button:hover { background:var(--bg-hover); }
+    .mp-year-label { font-weight:700;font-size:.95rem; }
+    .mp-months { display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem; }
+    .mp-month {
+      text-align:center;padding:.45rem .2rem;border-radius:var(--radius-sm);
+      font-size:.82rem;cursor:pointer;border:1.5px solid transparent;
+      transition:background .12s,color .12s,border-color .12s;
+    }
+    .mp-month:hover { background:var(--primary-light);color:var(--primary); }
+    .mp-month.selected { background:var(--primary);color:#fff;font-weight:700; }
+    .mp-month.today { border-color:var(--primary-muted); }
+  </style>
+</head>
+<body>
+
+<nav class="navbar no-print">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html" class="active">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+
+  <!-- Mark Attendance -->
+  <div class="card no-print" id="mark-form-card">
+    <div class="card-title">Mark Attendance</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Student *</label>
+        <select id="mark-student"><option value="">— Select Student —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Instructor</label>
+        <select id="mark-mentor"><option value="">— Select Instructor —</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Signature *</label>
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="sig-wrap" style="width:100%;max-width:400px">
+          <canvas id="sig-canvas" class="sig-canvas" width="400" height="120"></canvas>
+          <div class="sig-hint" id="sig-hint">Sign here</div>
+          <button type="button" class="btn btn-sm btn-outline sig-clear" onclick="sigPad.clear();document.getElementById('sig-hint').style.display=''">Clear</button>
+        </div>
+      </div>
+    </div>
+    <div id="mark-error" class="alert alert-danger" style="display:none"></div>
+    <button class="btn btn-primary" onclick="submitAttendance()">Save Attendance</button>
+  </div>
+
+  <div class="page-title" style="margin-top:1.5rem">
+    Attendance Records
+    <div class="page-title-actions no-print">
+      <button class="btn btn-outline" onclick="printAttendance()">🖨 Print</button>
+    </div>
+  </div>
+
+  <div class="print-attendance-header">
+    <h1 style="font-size:1.3rem;font-weight:700">Ankushe Driving School</h1>
+    <p id="print-subtitle" style="font-size:.85rem;color:#7a5018"></p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar no-print">
+    <button class="tab-btn active" onclick="switchTab('records')">All Records</button>
+    <button class="tab-btn" onclick="switchTab('instructor')">By Instructor</button>
+  </div>
+
+  <!-- Tab: All Records -->
+  <div id="tab-records" class="tab-panel active">
+    <div class="filters no-print">
+      <div class="filter-group">
+        <label>Student</label>
+        <select id="filter-student"><option value="">All Students</option></select>
+      </div>
+      <div class="filter-group">
+        <label>From</label>
+        <input type="date" id="filter-start" onchange="loadAttendance()">
+      </div>
+      <div class="filter-group">
+        <label>To</label>
+        <input type="date" id="filter-end" onchange="loadAttendance()">
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="clearFilters()">Clear</button>
+    </div>
+    <div id="attendance-count" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem"></div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th><th>Enroll No</th><th>Date &amp; Time</th>
+            <th>Instructor</th><th>Marked By</th><th>Signature</th>
+            <th class="no-print">Delete</th>
+          </tr>
+        </thead>
+        <tbody id="attendance-body">
+          <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab: By Instructor -->
+  <div id="tab-instructor" class="tab-panel">
+    <div class="filters no-print" style="flex-wrap:wrap;gap:.75rem">
+      <div class="filter-group">
+        <label>Instructor</label>
+        <select id="instr-filter-select"><option value="">— Select —</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Month</label>
+        <div class="month-picker-wrap" id="mp-wrap">
+          <button type="button" class="month-picker-btn" onclick="mpToggle()" id="mp-btn">
+            <span id="mp-display">Select month</span>
+            <span class="mp-arrow">▼</span>
+          </button>
+          <div class="month-picker-dropdown" id="mp-dropdown">
+            <div class="mp-year-nav">
+              <button onclick="mpChangeYear(-1)">&#8249;</button>
+              <span class="mp-year-label" id="mp-year"></span>
+              <button onclick="mpChangeYear(1)">&#8250;</button>
+            </div>
+            <div class="mp-months" id="mp-months"></div>
+          </div>
+        </div>
+        <input type="hidden" id="instr-filter-month">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadInstructorView()">View</button>
+    </div>
+    <div id="instr-view-body"></div>
+  </div>
+
+</div>
+
+<script>
+let sigPad = null, _userProfile = null, _allStudents = [], _allInstructors = [];
+let _tsMarkStudent = null, _tsFilterStudent = null;
+let _activeTab = 'records';
+
+requireAuth(['admin']).then(async ({ profile }) => {
+  _userProfile = profile;
+  const [students, instructors] = await Promise.all([getStudents({ status: 'all' }), getActiveInstructors()]);
+  _allStudents    = students;
+  _allInstructors = instructors;
+
+  populateStudentDropdowns(students);
+
+  const instrSel = document.getElementById('mark-mentor');
+  instructors.forEach(i => {
+    instrSel.appendChild(Object.assign(document.createElement('option'), { value: i.name, textContent: i.name }));
+  });
+  new TomSelect('#mark-mentor', { placeholder: '— Select Instructor —', allowEmptyOption: true, create: false });
+
+  const instrFilter = document.getElementById('instr-filter-select');
+  instructors.forEach(i => {
+    instrFilter.appendChild(Object.assign(document.createElement('option'), { value: i.name, textContent: i.name }));
+  });
+
+  // Default month = current
+  const now = new Date();
+  mpInit(now.getFullYear(), now.getMonth());
+
+  sigPad = initSignaturePad('sig-canvas');
+  sigPad.clear();
+
+  const preId = getQueryParam('id');
+  if (preId) { _tsMarkStudent?.setValue(preId); _tsFilterStudent?.setValue(preId); }
+
+  loadAttendance();
+});
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b, i) =>
+    b.classList.toggle('active', ['records','instructor'][i] === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+function populateStudentDropdowns(students) {
+  ['mark-student','filter-student'].forEach(id => {
+    const sel = document.getElementById(id);
+    const isFilter = id === 'filter-student';
+    sel.innerHTML = `<option value="">${isFilter ? 'All Students' : '— Select Student —'}</option>`;
+    students.forEach(s => {
+      sel.appendChild(Object.assign(document.createElement('option'), { value: s.id, textContent: `${s.name} (${s.enrollmentNumber})` }));
+    });
+  });
+  _tsMarkStudent   = new TomSelect('#mark-student',   { placeholder: '— Type to search student —', allowEmptyOption: true, create: false });
+  _tsFilterStudent = new TomSelect('#filter-student', { placeholder: 'All Students', allowEmptyOption: true, create: false, onChange: () => loadAttendance() });
+}
+
+async function submitAttendance() {
+  const errEl = document.getElementById('mark-error');
+  errEl.style.display = 'none';
+  const studentId  = document.getElementById('mark-student').value;
+  const mentorName = document.getElementById('mark-mentor').value;
+  if (!studentId) { errEl.textContent = 'Select a student.'; errEl.style.display = ''; return; }
+  if (!sigPad || sigPad.isEmpty()) { errEl.textContent = 'Signature is required.'; errEl.style.display = ''; return; }
+  const user = getCurrentUser();
+  try {
+    await markAttendance({ studentId, markedBy: user.phone, markedByRole: _userProfile.role, mentorName, signatureDataURL: sigPad.getDataURL() });
+    showToast('Attendance saved.', 'success');
+    sigPad.clear();
+    document.getElementById('sig-hint').style.display = '';
+    _tsMarkStudent?.clear();
+    loadAttendance();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = ''; }
+}
+
+async function loadAttendance() {
+  const body = document.getElementById('attendance-body');
+  body.innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>';
+  const studentId = document.getElementById('filter-student').value || null;
+  const start     = document.getElementById('filter-start').value;
+  const end       = document.getElementById('filter-end').value;
+  const startDate = start ? new Date(start) : null;
+  const endDate   = end   ? (() => { const d = new Date(end); d.setHours(23,59,59,999); return d; })() : null;
+  try {
+    const toMs = d => d?.toMillis ? d.toMillis() : new Date(d || 0).getTime();
+    const records = (await getAllAttendance({ startDate, endDate, studentId })).sort((a,b) => toMs(b.date) - toMs(a.date));
+    document.getElementById('attendance-count').textContent = `${records.length} record${records.length !== 1 ? 's' : ''}`;
+    if (!records.length) { body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><h3>No attendance records</h3></div></td></tr>'; return; }
+    body.innerHTML = records.map(a => `<tr>
+      <td>${escapeHtml(a.studentName||'—')}</td>
+      <td class="td-muted">${escapeHtml(a.enrollmentNumber||'—')}</td>
+      <td>${formatDateTime(a.date)}</td>
+      <td>${escapeHtml(a.mentorName||'—')}</td>
+      <td><span class="badge badge-${a.markedByRole==='student'?'primary':'success'}">${a.markedByRole}</span></td>
+      <td>${a.signatureDataURL?`<img src="${a.signatureDataURL}" style="height:40px;border:1px solid var(--border);border-radius:4px">`:'—'}</td>
+      <td class="no-print"><button class="btn btn-sm btn-danger" onclick="deleteRecord('${a.id}')">Delete</button></td>
+    </tr>`).join('');
+  } catch(e) { body.innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${e.message}</div></td></tr>`; }
+}
+
+async function loadInstructorView() {
+  const instrName = document.getElementById('instr-filter-select').value;
+  const monthVal  = document.getElementById('instr-filter-month').value;
+  const body      = document.getElementById('instr-view-body');
+
+  if (!instrName) { body.innerHTML = '<div class="alert alert-danger" style="margin-top:.5rem">Select an instructor.</div>'; return; }
+  if (!monthVal)  { body.innerHTML = '<div class="alert alert-danger" style="margin-top:.5rem">Select a month.</div>'; return; }
+
+  body.innerHTML = '<div class="loading" style="padding:1.5rem 0"><div class="spinner"></div></div>';
+
+  const [year, month] = monthVal.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate   = new Date(year, month, 0, 23, 59, 59, 999);
+
+  try {
+    const allRecs = await getAllAttendance({ startDate, endDate });
+    const instrRecs = allRecs.filter(r => r.mentorName === instrName);
+
+    // Group by date string
+    const byDate = {};
+    instrRecs.forEach(r => {
+      const d = r.date?.toDate ? r.date.toDate() : new Date(r.date);
+      const key = d.toISOString().slice(0, 10);
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(r);
+    });
+
+    // Build all days in month
+    const daysInMonth = endDate.getDate();
+    const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    let html = `<div style="margin-top:.75rem;font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem">
+      ${instrName} — ${startDate.toLocaleString('en-IN',{month:'long',year:'numeric'})}
+    </div>`;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month - 1, day);
+      const key = d.toISOString().slice(0, 10);
+      const sessions = byDate[key] || [];
+      const dayLabel = `${DAY_NAMES[d.getDay()]}, ${String(day).padStart(2,'0')} ${d.toLocaleString('en-IN',{month:'short'})}`;
+      const hasSessions = sessions.length > 0;
+
+      html += `<div class="instr-day">
+        <div class="instr-day-header">
+          <span class="instr-day-date">${dayLabel}</span>
+          ${hasSessions
+            ? `<span class="badge badge-success">${sessions.length} session${sessions.length!==1?'s':''}</span>`
+            : `<span class="badge" style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border)">No sessions</span>`
+          }
+        </div>
+        ${hasSessions ? `<div class="instr-day-body">${sessions.map(s => `
+          <div class="session-row">
+            <strong>${escapeHtml(s.studentName||'—')}</strong>
+            <span style="color:var(--text-muted);margin-left:.5rem">${escapeHtml(s.enrollmentNumber||'')}</span>
+            <span style="color:var(--text-muted);margin-left:.5rem;font-size:.8rem">${formatDateTime(s.date)}</span>
+          </div>`).join('')}</div>` : ''}
+      </div>`;
+    }
+
+    body.innerHTML = html;
+  } catch(e) { body.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this attendance record?')) return;
+  try { await deleteAttendance(id); showToast('Deleted.', 'success'); loadAttendance(); }
+  catch(e) { showToast(e.message, 'danger'); }
+}
+
+function clearFilters() {
+  document.getElementById('filter-student').value = '';
+  document.getElementById('filter-start').value   = '';
+  document.getElementById('filter-end').value     = '';
+  loadAttendance();
+}
+
+// ── Month Picker ────────────────────────────────────────────
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let _mpYear, _mpMonth; // 0-based month
+
+function mpInit(year, month) {
+  _mpYear = year; _mpMonth = month;
+  mpSetValue(year, month);
+  mpRender();
+}
+
+function mpSetValue(year, month) {
+  const val = `${year}-${String(month + 1).padStart(2,'0')}`;
+  document.getElementById('instr-filter-month').value = val;
+  document.getElementById('mp-display').textContent = `${MONTHS[month]} ${year}`;
+}
+
+function mpRender() {
+  document.getElementById('mp-year').textContent = _mpYear;
+  const now = new Date();
+  const html = MONTHS.map((m, i) => {
+    const isSelected = (i === _mpMonth);
+    const isToday = (_mpYear === now.getFullYear() && i === now.getMonth());
+    return `<div class="mp-month${isSelected?' selected':''}${(!isSelected&&isToday)?' today':''}" onclick="mpSelect(${i})">${m}</div>`;
+  }).join('');
+  document.getElementById('mp-months').innerHTML = html;
+}
+
+function mpToggle() {
+  const dd = document.getElementById('mp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) mpRender();
+}
+
+function mpChangeYear(delta) {
+  _mpYear += delta;
+  mpRender();
+}
+
+function mpSelect(month) {
+  _mpMonth = month;
+  mpSetValue(_mpYear, month);
+  document.getElementById('mp-dropdown').classList.remove('open');
+}
+
+// Close picker on outside click
+document.addEventListener('click', e => {
+  if (!document.getElementById('mp-wrap')?.contains(e.target))
+    document.getElementById('mp-dropdown')?.classList.remove('open');
+});
+// ────────────────────────────────────────────────────────────
+
+function printAttendance() {
+  const studentSel  = document.getElementById('filter-student');
+  const studentName = studentSel.value ? studentSel.options[studentSel.selectedIndex].text : 'All Students';
+  const start = document.getElementById('filter-start').value;
+  const end   = document.getElementById('filter-end').value;
+  document.getElementById('print-subtitle').textContent =
+    `Attendance: ${studentName} | ${(start||end) ? `${start||'—'} to ${end||'—'}` : 'All Dates'} | Printed ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+  window.print();
+}
+</script>
+</body>
+</html>

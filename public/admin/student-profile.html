@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Profile — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .profile-grid { display:grid;grid-template-columns:auto 1fr;gap:1.5rem;align-items:start; }
+    .detail-cols { display:grid;grid-template-columns:1fr 1fr;gap:.25rem 1.25rem; }
+    .detail-row { display:flex;flex-direction:column;gap:.1rem;padding:.35rem 0;font-size:.875rem;border-bottom:1px solid var(--border); }
+    .detail-row.full { grid-column:1 / -1; }
+    .detail-label { color:var(--text-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em; }
+    .detail-value { font-weight:600;color:var(--text); }
+    .fee-summary { display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1rem 0; }
+    .fee-box { text-align:center;padding:.85rem;border-radius:var(--radius); }
+    .fee-box .amt { font-size:1.3rem;font-weight:700; }
+    .fee-box .lbl { font-size:.75rem;text-transform:uppercase;color:var(--text-muted);margin-top:.2rem; }
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    @media (max-width:500px) { .profile-grid { grid-template-columns:1fr; } .detail-cols { grid-template-columns:1fr; } .detail-row.full { grid-column:1; } .fee-summary { grid-template-columns:1fr 1fr; } }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+</head>
+<body>
+
+<nav class="navbar no-print">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html" class="active">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" id="profile-root">
+  <div class="loading"><div class="spinner"></div> Loading…</div>
+</div>
+
+<script>
+const studentId = getQueryParam('id');
+if (!studentId) window.location.href = 'students.html';
+
+const RELATION_LABEL = { son: 'Son of', wife: 'Wife of', daughter: 'Daughter of', co: 'C/o' };
+
+requireAuth(['admin']).then(async () => {
+  const [student, payments, attendance] = await Promise.all([
+    getStudent(studentId),
+    getStudentPayments(studentId),
+    getStudentAttendance(studentId)
+  ]);
+  if (!student) { document.getElementById('profile-root').innerHTML = '<div class="alert alert-danger">Student not found.</div>'; return; }
+  renderProfile(student, payments, attendance);
+});
+
+function renderProfile(s, payments, attendance) {
+  const balColor = s.balance > 0 ? 'var(--danger)' : 'var(--success)';
+  document.title = `${s.name} — Ankushe Driving School`;
+
+  const relationLabel = RELATION_LABEL[s.relation] || '';
+  const guardianDisplay = relationLabel && s.guardianName
+    ? `${relationLabel}: ${escapeHtml(s.guardianName)}`
+    : escapeHtml(s.guardianName || '—');
+
+  const tempAddr = s.tempAddressSame !== false
+    ? 'Same as permanent'
+    : [s.tempAddressFlat, s.tempAddressLine2, s.tempAddressArea, s.tempAddressDistrictState, s.tempAddressPincode].filter(Boolean).join(', ') || '—';
+
+  const permAddr = s.address || [s.addressFlat, s.addressLine2, s.addressArea, s.addressDistrictState, s.pincode].filter(Boolean).join(', ') || '—';
+
+  const fmtDate = str => {
+    if (!str) return '—';
+    const d = str.toDate ? str.toDate() : new Date(str);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  };
+
+  document.getElementById('profile-root').innerHTML = `
+    <div class="page-title no-print">
+      Student Profile
+      <div class="page-title-actions">
+        <a href="form14.html?id=${s.id}" target="_blank" class="btn btn-outline">Form 14</a>
+        <a href="form15.html?id=${s.id}" target="_blank" class="btn btn-outline">Form 15</a>
+        <a href="student-form.html?id=${s.id}" class="btn btn-outline">Edit</a>
+        <a href="students.html" class="btn btn-outline">← Back</a>
+      </div>
+    </div>
+
+    <div class="card" id="profile-card">
+      <div class="profile-grid">
+        <div>
+          ${s.photoURL
+            ? `<img src="${escapeHtml(s.photoURL)}" class="student-photo" style="width:100px;height:100px">`
+            : `<div class="student-photo-placeholder" style="width:100px;height:100px;font-size:2.5rem">👤</div>`}
+        </div>
+        <div>
+          <h2 style="font-size:1.3rem;margin-bottom:.85rem">${escapeHtml(s.name)}</h2>
+          <div class="detail-cols">
+            <div class="detail-row"><span class="detail-label">Enrollment No</span><span class="detail-value">${escapeHtml(s.enrollmentNumber) || '—'}</span></div>
+            <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${displayPhone(s.phone)}</span></div>
+            ${s.dob ? `<div class="detail-row"><span class="detail-label">Date of Birth</span><span class="detail-value">${fmtDate(s.dob)}</span></div>` : ''}
+            <div class="detail-row"><span class="detail-label">Enrolled On</span><span class="detail-value">${formatDate(s.enrollmentDate)}</span></div>
+            <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="badge badge-${s.status === 'active' ? 'success' : 'muted'}">${s.status}</span></span></div>
+            ${s.vehicleClass ? `<div class="detail-row"><span class="detail-label">Vehicle Class</span><span class="detail-value">${escapeHtml(s.vehicleClass)}</span></div>` : ''}
+            ${s.vehicleRegNo ? `<div class="detail-row"><span class="detail-label">Vehicle Reg No</span><span class="detail-value">${escapeHtml(s.vehicleRegNo)}</span></div>` : ''}
+            ${(s.guardianName || s.relation) ? `<div class="detail-row"><span class="detail-label">Guardian</span><span class="detail-value">${guardianDisplay}</span></div>` : ''}
+            ${s.guardianPhone ? `<div class="detail-row"><span class="detail-label">Guardian Phone</span><span class="detail-value">${escapeHtml(s.guardianPhone)}</span></div>` : ''}
+            <div class="detail-row full"><span class="detail-label">Permanent Address</span><span class="detail-value">${escapeHtml(permAddr)}</span></div>
+            <div class="detail-row full"><span class="detail-label">Temporary Address</span><span class="detail-value">${escapeHtml(tempAddr)}</span></div>
+            ${s.referralApplied ? `<div class="detail-row full"><span class="detail-label">Referral</span><span class="detail-value"><span class="badge badge-primary">₹200 Discount Applied</span></span></div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${(s.learnerLicenceNo || s.dlNumber || s.testPassDate) ? `
+    <div class="card">
+      <div class="card-title">Licence Details</div>
+      ${s.learnerLicenceNo ? `<div class="detail-row"><span class="detail-label">Learner's Licence</span><span class="detail-value">${escapeHtml(s.learnerLicenceNo)}${s.learnerLicenceExpiry ? ' · Expiry: ' + fmtDate(s.learnerLicenceExpiry) : ''}</span></div>` : ''}
+      ${s.testPassDate ? `<div class="detail-row"><span class="detail-label">Test Passed On</span><span class="detail-value">${fmtDate(s.testPassDate)}</span></div>` : ''}
+      ${s.dlNumber ? `<div class="detail-row"><span class="detail-label">Driving Licence</span><span class="detail-value">${escapeHtml(s.dlNumber)}${s.dlIssueDate ? ' · ' + fmtDate(s.dlIssueDate) : ''}${s.dlAuthority ? ' · ' + escapeHtml(s.dlAuthority) : ''}</span></div>` : ''}
+    </div>` : ''}
+
+    <div class="card">
+      <div class="card-title">Fee Summary</div>
+      <div class="fee-summary">
+        <div class="fee-box" style="background:var(--primary-light)">
+          <div class="amt" style="color:var(--primary)">${formatCurrency(s.totalFee)}</div>
+          <div class="lbl">Total Course Fee</div>
+        </div>
+        <div class="fee-box" style="background:var(--success-light)">
+          <div class="amt" style="color:var(--success)">${formatCurrency(s.paidFee)}</div>
+          <div class="lbl">Amount Paid</div>
+        </div>
+        <div class="fee-box" style="background:${s.balance > 0 ? 'var(--danger-light)' : 'var(--success-light)'}">
+          <div class="amt" style="color:${balColor}">${formatCurrency(s.balance)}</div>
+          <div class="lbl">Balance Due</div>
+        </div>
+      </div>
+      ${payments.length ? `
+      <div style="margin-top:.75rem">
+        <div style="font-size:.85rem;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;text-transform:uppercase">Payment History</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Note</th></tr></thead>
+            <tbody>
+              ${payments.map(p => `<tr>
+                <td>${formatDateTime(p.date)}</td>
+                <td class="td-amount" style="color:var(--success)">${formatCurrency(p.amount)}</td>
+                <td>${escapeHtml(p.method)}</td>
+                <td class="td-muted">${escapeHtml(p.note || '—')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+      <div class="no-print" style="margin-top:1rem">
+        <a href="fees.html?id=${s.id}" class="btn btn-primary">Record Payment</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Attendance
+        <span style="font-size:.85rem;font-weight:400;color:var(--text-muted);margin-left:.5rem">${attendance.length} session${attendance.length !== 1 ? 's' : ''}</span>
+      </div>
+      ${attendance.length ? `
+      <div class="table-scroll" style="max-height:320px">
+        <table>
+          <thead><tr><th>Date &amp; Time</th><th>Instructor / Marked By</th><th>Marked As</th><th>Signature</th></tr></thead>
+          <tbody>
+            ${attendance.map(a => `<tr>
+              <td>${formatDateTime(a.date)}</td>
+              <td>${escapeHtml(a.mentorName || a.markedByRole)}</td>
+              <td><span class="badge badge-${a.markedByRole === 'student' ? 'primary' : 'success'}">${a.markedByRole}</span></td>
+              <td>${a.signatureDataURL ? `<img src="${a.signatureDataURL}" style="height:36px;border:1px solid var(--border);border-radius:4px">` : '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><h3>No attendance records yet</h3></div>`}
+      <div class="no-print" style="margin-top:1rem">
+        <a href="attendance.html?id=${s.id}" class="btn btn-outline">Mark Attendance</a>
+      </div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign Attendance — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .sig-canvas { width: 100%; height: 160px; display: block; touch-action: none; cursor: crosshair; }
+    .submit-btn { width: 100%; padding: 1rem; font-size: 1rem; margin-top: 1rem; justify-content: center; }
+    .att-badge-wrap { display:flex;justify-content:center;margin-bottom:1.5rem; }
+    .att-badge { animation: badge-pop .55s cubic-bezier(.175,.885,.32,1.275) both; }
+    @keyframes badge-pop {
+      0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+      70%  { transform: scale(1.08) rotate(3deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <style>
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); font-size:.9rem; font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light); color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+  </style>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">My Info</a></li>
+    <li><a href="sign.html" class="active">Sign Attendance</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="sign-page">
+  <div class="sign-card" id="sign-form">
+    <h2 style="text-align:center;margin-bottom:.5rem;font-size:1.2rem">Sign Attendance</h2>
+    <div class="sign-date" id="today-label"></div>
+
+    <div style="text-align:center;margin-bottom:1rem;font-size:.9rem;color:var(--text-muted)" id="student-label">
+      Loading…
+    </div>
+
+    <div class="form-group">
+      <label>Instructor Present</label>
+      <select id="instructor-select">
+        <option value="">— Select Instructor —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label style="text-align:center;display:block;margin-bottom:.5rem">Your Signature</label>
+      <div class="sig-wrap">
+        <canvas id="sig-canvas" class="sig-canvas" width="440" height="160"></canvas>
+        <div class="sig-hint" id="sig-hint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.9rem;pointer-events:none">
+          Draw your signature here
+        </div>
+      </div>
+      <div style="text-align:right;margin-top:.35rem">
+        <button type="button" class="btn btn-sm btn-outline" onclick="clearSig()">Clear</button>
+      </div>
+    </div>
+
+    <div id="sign-error" class="alert alert-danger" style="display:none"></div>
+
+    <button class="btn btn-primary submit-btn" id="submit-btn" onclick="submitSign()">
+      Confirm Attendance
+    </button>
+  </div>
+
+  <div class="sign-card success-card" id="success-panel" style="display:none">
+    <div class="att-badge-wrap">
+      <svg class="att-badge" viewBox="0 0 120 120" width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bg-g" cx="38%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#d4900a"/>
+            <stop offset="100%" stop-color="#5a3200"/>
+          </radialGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- outer decorative ring -->
+        <circle cx="60" cy="60" r="56" fill="none" stroke="rgba(196,124,5,.25)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <!-- main circle -->
+        <circle cx="60" cy="60" r="46" fill="url(#bg-g)"/>
+        <!-- inner highlight ring -->
+        <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(255,210,80,.35)" stroke-width="2"/>
+        <!-- check mark -->
+        <polyline filter="url(#glow)" points="36,61 52,78 84,42" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2 style="margin-bottom:.4rem;letter-spacing:-.02em">Attendance Recorded!</h2>
+    <p style="color:var(--text-muted);font-size:.9rem" id="success-msg"></p>
+    <a href="dashboard.html" class="btn btn-primary" style="margin-top:1.75rem;min-width:180px;justify-content:center">Back to Dashboard</a>
+  </div>
+</div>
+
+<script>
+let sigPad   = null;
+let _student = null;
+let _session = null;
+
+requireAuth(['student']).then(async ({ profile }) => {
+  _session = profile;
+
+  const now = new Date();
+  document.getElementById('today-label').textContent =
+    now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  if (!profile.studentId) {
+    document.getElementById('sign-error').textContent = 'Your account is not linked to a student record. Contact admin.';
+    document.getElementById('sign-error').style.display = '';
+    document.getElementById('submit-btn').disabled = true;
+    return;
+  }
+
+  _student = await getStudent(profile.studentId);
+  if (!_student) {
+    document.getElementById('sign-error').textContent = 'Student record not found.';
+    document.getElementById('sign-error').style.display = '';
+    return;
+  }
+
+  document.getElementById('student-label').textContent =
+    `${_student.name} — ${_student.enrollmentNumber}`;
+
+  const instructors = await getActiveInstructors();
+  const sel = document.getElementById('instructor-select');
+  instructors.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i.name;
+    opt.textContent = i.name;
+    sel.appendChild(opt);
+  });
+
+  new TomSelect('#instructor-select', {
+    placeholder: '— Select Instructor —',
+    allowEmptyOption: true, create: false, maxOptions: null,
+  });
+
+  sigPad = initSignaturePad('sig-canvas');
+  sigPad.clear();
+
+  document.getElementById('sig-canvas').addEventListener('mousedown', hideSigHint);
+  document.getElementById('sig-canvas').addEventListener('touchstart', hideSigHint, { passive: false });
+});
+
+function hideSigHint() { document.getElementById('sig-hint').style.display = 'none'; }
+
+function clearSig() {
+  if (sigPad) sigPad.clear();
+  document.getElementById('sig-hint').style.display = '';
+}
+
+async function submitSign() {
+  const errEl = document.getElementById('sign-error');
+  errEl.style.display = 'none';
+
+  if (!_student) return;
+  if (sigPad && sigPad.isEmpty()) {
+    errEl.textContent = 'Please sign before submitting.';
+    errEl.style.display = ''; return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const signatureDataURL = sigPad ? sigPad.getDataURL() : '';
+    const today = new Date().toISOString().slice(0, 10);
+
+    const instructorName = document.getElementById('instructor-select').value;
+    await markAttendance({
+      studentId:       _student.id,
+      date:            today,
+      markedBy:        _session.phone,
+      markedByRole:    'student',
+      mentorName:      instructorName,
+      signatureDataURL
+    });
+
+    document.getElementById('sign-form').style.display    = 'none';
+    document.getElementById('success-panel').style.display = '';
+    document.getElementById('success-msg').textContent =
+      `Signed on ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+    btn.disabled    = false;
+    btn.textContent = 'Confirm Attendance';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Form — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/drive.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;font-family:inherit;padding:.58rem .85rem;box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);font-size:.9rem;font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light);color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+    .section-hint { font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem; }
+    .manage-link { font-size:.8rem;color:var(--primary);text-decoration:none;margin-left:.5rem; }
+    .manage-link:hover { text-decoration:underline; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html" class="active">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:760px">
+  <div class="page-title" id="form-title">
+    Add Student
+    <a href="students.html" class="btn btn-outline btn-sm">← Back</a>
+  </div>
+
+  <form id="student-form" onsubmit="submitForm(event)">
+
+    <!-- Personal Details -->
+    <div class="card">
+      <div class="card-title">Personal Details</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="name" required placeholder="e.g. Rajesh Kumar">
+        </div>
+        <div class="form-group">
+          <label>Mobile Number *</label>
+          <input type="tel" id="phone" required placeholder="98765 43210" maxlength="10" pattern="\d{10}" title="Enter exactly 10 digits">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Birth *</label>
+          <input type="date" id="dob" required oninput="limitDobYear(this)">
+        </div>
+        <div class="form-group">
+          <label>Relation</label>
+          <select id="relation">
+            <option value="">— Select —</option>
+            <option value="son">Son of</option>
+            <option value="wife">Wife of</option>
+            <option value="daughter">Daughter of</option>
+            <option value="co">C/o</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Guardian / Parent Name *</label>
+          <input type="text" id="guardian-name" required placeholder="Father / Spouse / Guardian name">
+        </div>
+        <div class="form-group">
+          <label>Guardian / Parent Phone *</label>
+          <input type="tel" id="guardian-phone" required placeholder="98765 43210" maxlength="10" pattern="\d{10}" title="Enter exactly 10 digits">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Photo *</label>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <div id="photo-preview"><div class="student-photo-placeholder">👤</div></div>
+          <div>
+            <input type="file" id="photo-file" accept="image/*" onchange="previewPhoto()" style="display:none">
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('photo-file').click()">Choose Photo</button>
+            <div class="form-hint">Compressed and saved to Google Drive. Requires admin Google Sign-in.</div>
+          </div>
+        </div>
+        <input type="hidden" id="photo-url">
+      </div>
+    </div>
+
+    <!-- Permanent Address -->
+    <div class="card">
+      <div class="card-title">Permanent Address *</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Flat / House Number *</label>
+          <input type="text" id="address-flat" required placeholder="e.g. Flat 4B, Sunrise Apts">
+        </div>
+        <div class="form-group">
+          <label>Address Line 2</label>
+          <input type="text" id="address-line2" placeholder="Street, landmark, colony…">
+        </div>
+      </div>
+      <div class="form-group" style="max-width:220px">
+        <label>Pincode *</label>
+        <div style="display:flex;gap:.5rem;align-items:flex-start">
+          <input type="text" id="pincode" placeholder="560001" maxlength="6" pattern="\d{6}" title="6-digit pincode" oninput="onPincodeInput('perm')" required style="flex:1">
+          <div id="pincode-spinner" style="display:none;align-self:center"><div class="spinner" style="width:18px;height:18px"></div></div>
+        </div>
+        <div id="pincode-msg" style="font-size:.8rem;margin-top:.25rem"></div>
+      </div>
+      <div class="form-row" id="area-row" style="display:none">
+        <div class="form-group">
+          <label>Area / Locality</label>
+          <input type="text" id="address-area" readonly style="background:var(--bg);cursor:default">
+        </div>
+        <div class="form-group">
+          <label>District &amp; State</label>
+          <input type="text" id="address-district-state" readonly style="background:var(--bg);cursor:default">
+        </div>
+      </div>
+    </div>
+
+    <!-- Temporary Address -->
+    <div class="card">
+      <div class="card-title">Temporary / Official Address</div>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:1rem">
+        <input type="checkbox" id="temp-same" checked onchange="toggleTempAddress()">
+        <span style="font-size:.9rem">Same as permanent address</span>
+      </label>
+      <div id="temp-address-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Flat / House Number</label>
+            <input type="text" id="temp-address-flat" placeholder="e.g. Flat 4B, Sunrise Apts">
+          </div>
+          <div class="form-group">
+            <label>Address Line 2</label>
+            <input type="text" id="temp-address-line2" placeholder="Street, landmark, colony…">
+          </div>
+        </div>
+        <div class="form-group" style="max-width:220px">
+          <label>Pincode</label>
+          <div style="display:flex;gap:.5rem;align-items:flex-start">
+            <input type="text" id="temp-pincode" placeholder="560001" maxlength="6" pattern="\d{6}" title="6-digit pincode" oninput="onPincodeInput('temp')" style="flex:1">
+            <div id="temp-pincode-spinner" style="display:none;align-self:center"><div class="spinner" style="width:18px;height:18px"></div></div>
+          </div>
+          <div id="temp-pincode-msg" style="font-size:.8rem;margin-top:.25rem"></div>
+        </div>
+        <div class="form-row" id="temp-area-row" style="display:none">
+          <div class="form-group">
+            <label>Area / Locality</label>
+            <input type="text" id="temp-address-area" readonly style="background:var(--bg);cursor:default">
+          </div>
+          <div class="form-group">
+            <label>District &amp; State</label>
+            <input type="text" id="temp-address-district-state" readonly style="background:var(--bg);cursor:default">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enrollment Details -->
+    <div class="card">
+      <div class="card-title">Enrollment Details</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Enrollment Date *</label>
+          <input type="date" id="enrollment-date" required>
+        </div>
+        <div class="form-group">
+          <label>Enrollment Number</label>
+          <input type="text" id="enrollment-no" disabled placeholder="Auto-generated" style="background:var(--bg)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Vehicle & Licence -->
+    <div class="card">
+      <div class="card-title">
+        Vehicle &amp; Licence
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>
+            Class of Vehicle
+            <a href="masters.html" target="_blank" class="manage-link">Masters ↗</a>
+          </label>
+          <select id="vehicle-class">
+            <option value="">— Select Class —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>
+            Vehicle Reg No. Trained On
+            <a href="masters.html" target="_blank" class="manage-link">Masters ↗</a>
+          </label>
+          <select id="vehicle-reg-no">
+            <option value="">— Select Vehicle —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Learner's Licence Number</label>
+          <input type="text" id="learner-licence-no" placeholder="e.g. MH12/0071397/2024" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>LL Expiry Date</label>
+          <input type="date" id="learner-licence-expiry">
+        </div>
+      </div>
+      <div class="form-group" style="max-width:260px">
+        <label>Date of Passing Test of Competence</label>
+        <input type="date" id="test-pass-date">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Driving Licence Number</label>
+          <input type="text" id="dl-number" placeholder="e.g. MH122022DSL00040" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>DL Issue Date</label>
+          <input type="date" id="dl-issue-date">
+        </div>
+      </div>
+      <div class="form-group" style="max-width:340px">
+        <label>
+          DL Issuing Authority
+          <a href="masters.html" target="_blank" class="manage-link">Masters ↗</a>
+        </label>
+        <select id="dl-authority">
+          <option value="">— Select Authority —</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Fee Details -->
+    <div class="card">
+      <div class="card-title">Fee Details</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Total Course Fee (₹) *</label>
+          <input type="number" id="total-fee" required min="0" step="1" placeholder="e.g. 3000">
+          <div class="form-hint">Enter in rupees — stored as paise internally.</div>
+        </div>
+        <div class="form-group">
+          <label>Amount Paid at Enrollment (₹)</label>
+          <input type="number" id="paid-fee" min="0" step="1" placeholder="0" value="0">
+        </div>
+      </div>
+    </div>
+
+    <!-- Referral (auto-applied from link) -->
+    <div class="card" id="referral-card" style="display:none">
+      <div class="card-title">Referral</div>
+      <div id="referral-info"></div>
+      <input type="hidden" id="referrer-id">
+      <input type="hidden" id="referral-code">
+      <input type="hidden" id="referrer-name">
+    </div>
+
+    <div id="form-error" class="alert alert-danger" style="display:none"></div>
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem">
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">Save Student</button>
+      <a href="students.html" class="btn btn-outline btn-lg">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const { db: _db } = initFirebase();
+const studentId = getQueryParam('id');
+let editingStudent = null;
+let _tsVehicleClass = null;
+let _tsDLAuthority  = null;
+let _tsVehicleRegNo = null;
+
+requireAuth(['admin']).then(async () => {
+  document.getElementById('enrollment-date').value = todayISO();
+
+  // Load vehicle classes, DL authorities, and training vehicles in parallel
+  const [classes, authorities, vehicles] = await Promise.all([
+    getVehicleClasses().catch(() => []),
+    getDLAuthorities().catch(() => []),
+    getTrainingVehicles().catch(() => [])
+  ]);
+
+  const vcSel = document.getElementById('vehicle-class');
+  classes.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name; opt.textContent = c.name;
+    vcSel.appendChild(opt);
+  });
+  _tsVehicleClass = new TomSelect('#vehicle-class', {
+    placeholder: '— Select Class —',
+    allowEmptyOption: true, create: false, maxOptions: null,
+  });
+
+  const dlaSel = document.getElementById('dl-authority');
+  authorities.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.name; opt.textContent = a.name;
+    dlaSel.appendChild(opt);
+  });
+  _tsDLAuthority = new TomSelect('#dl-authority', {
+    placeholder: '— Select Authority —',
+    allowEmptyOption: true, create: false, maxOptions: null,
+  });
+
+  const tvSel = document.getElementById('vehicle-reg-no');
+  vehicles.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.regNo;
+    opt.textContent = v.description ? `${v.regNo} — ${v.description}` : v.regNo;
+    tvSel.appendChild(opt);
+  });
+  _tsVehicleRegNo = new TomSelect('#vehicle-reg-no', {
+    placeholder: '— Select Vehicle —',
+    allowEmptyOption: true, create: false, maxOptions: null,
+  });
+
+  if (studentId) {
+    document.getElementById('form-title').childNodes[0].textContent = 'Edit Student ';
+    const s = await getStudent(studentId);
+    if (!s) { showToast('Student not found', 'danger'); return; }
+    editingStudent = s;
+    populateForm(s);
+  } else {
+    const refCode = getQueryParam('ref');
+    if (refCode) {
+      try {
+        const referrer = await getStudentByEnrollment(refCode.toUpperCase());
+        if (referrer) {
+          document.getElementById('referrer-id').value   = referrer.id;
+          document.getElementById('referral-code').value = refCode.toUpperCase();
+          document.getElementById('referrer-name').value = referrer.name;
+          document.getElementById('referral-info').innerHTML = `
+            <div class="alert alert-success" style="margin:0">
+              ✓ Referred by <strong>${escapeHtml(referrer.name)}</strong> (${escapeHtml(referrer.enrollmentNumber)}) —
+              this student will receive a <strong>₹200 discount</strong>.
+            </div>`;
+          document.getElementById('referral-card').style.display = '';
+        }
+      } catch { /* non-critical */ }
+    }
+  }
+});
+
+function populateForm(s) {
+  document.getElementById('name').value              = s.name;
+  document.getElementById('phone').value             = s.phone.replace(/^\+91/, '');
+  document.getElementById('dob').value               = s.dob || '';
+  document.getElementById('relation').value          = s.relation || '';
+  document.getElementById('guardian-name').value     = s.guardianName || '';
+  document.getElementById('guardian-phone').value    = (s.guardianPhone || '').replace(/^\+91/, '');
+  document.getElementById('address-flat').value      = s.addressFlat || s.address || '';
+  document.getElementById('address-line2').value     = s.addressLine2 || '';
+  document.getElementById('address-area').value      = s.addressArea || '';
+  document.getElementById('address-district-state').value = s.addressDistrictState || '';
+  if (s.addressArea || s.addressDistrictState) document.getElementById('area-row').style.display = '';
+  document.getElementById('pincode').value           = s.pincode || '';
+
+  const tempSame = s.tempAddressSame !== false;
+  document.getElementById('temp-same').checked = tempSame;
+  if (!tempSame) {
+    document.getElementById('temp-address-fields').style.display = '';
+    document.getElementById('temp-address-flat').value  = s.tempAddressFlat || '';
+    document.getElementById('temp-address-line2').value = s.tempAddressLine2 || '';
+    document.getElementById('temp-pincode').value       = s.tempAddressPincode || '';
+    document.getElementById('temp-address-area').value  = s.tempAddressArea || '';
+    document.getElementById('temp-address-district-state').value = s.tempAddressDistrictState || '';
+    if (s.tempAddressArea || s.tempAddressDistrictState) document.getElementById('temp-area-row').style.display = '';
+  }
+
+  document.getElementById('enrollment-date').value  = s.enrollmentDate
+    ? (s.enrollmentDate.toDate ? s.enrollmentDate.toDate() : new Date(s.enrollmentDate)).toISOString().slice(0, 10) : '';
+  document.getElementById('enrollment-no').value    = s.enrollmentNumber;
+  document.getElementById('total-fee').value        = s.totalFee / 100;
+  document.getElementById('paid-fee').value         = s.paidFee  / 100;
+
+  if (_tsVehicleClass && s.vehicleClass) _tsVehicleClass.setValue(s.vehicleClass);
+  if (_tsVehicleRegNo && s.vehicleRegNo) _tsVehicleRegNo.setValue(s.vehicleRegNo);
+  document.getElementById('learner-licence-no').value     = s.learnerLicenceNo || '';
+  document.getElementById('learner-licence-expiry').value = s.learnerLicenceExpiry || '';
+  document.getElementById('test-pass-date').value         = s.testPassDate || '';
+  document.getElementById('dl-number').value              = s.dlNumber || '';
+  document.getElementById('dl-issue-date').value          = s.dlIssueDate || '';
+  if (_tsDLAuthority && s.dlAuthority) _tsDLAuthority.setValue(s.dlAuthority);
+
+  document.getElementById('photo-url').value = s.photoURL || '';
+  if (s.photoURL) {
+    document.getElementById('photo-preview').innerHTML =
+      `<img src="${escapeHtml(s.photoURL)}" class="student-photo">`;
+  }
+  document.getElementById('referral-card').style.display = 'none';
+}
+
+function toggleTempAddress() {
+  const same = document.getElementById('temp-same').checked;
+  document.getElementById('temp-address-fields').style.display = same ? 'none' : '';
+}
+
+let _pincodeTimer = null, _tempPincodeTimer = null;
+
+function onPincodeInput(type) {
+  const idPrefix = type === 'temp' ? 'temp-' : '';
+  const val = document.getElementById(idPrefix + 'pincode').value.trim();
+  if (type === 'temp') {
+    clearTimeout(_tempPincodeTimer);
+    if (val.length === 6 && /^\d{6}$/.test(val)) _tempPincodeTimer = setTimeout(() => fetchArea(val, 'temp'), 400);
+  } else {
+    clearTimeout(_pincodeTimer);
+    if (val.length === 6 && /^\d{6}$/.test(val)) _pincodeTimer = setTimeout(() => fetchArea(val, 'perm'), 400);
+    else document.getElementById('pincode-msg').textContent = '';
+  }
+}
+
+async function fetchArea(pin, type) {
+  const isPerm = type === 'perm';
+  const spinnerId = isPerm ? 'pincode-spinner' : 'temp-pincode-spinner';
+  const msgId     = isPerm ? 'pincode-msg'     : 'temp-pincode-msg';
+  const areaId    = isPerm ? 'address-area'    : 'temp-address-area';
+  const dsId      = isPerm ? 'address-district-state' : 'temp-address-district-state';
+  const rowId     = isPerm ? 'area-row'        : 'temp-area-row';
+
+  document.getElementById(spinnerId).style.display = '';
+  document.getElementById(msgId).textContent = '';
+  try {
+    const res  = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+    const data = await res.json();
+    if (data[0].Status === 'Success' && data[0].PostOffice?.length) {
+      const po = data[0].PostOffice[0];
+      const locality  = [po.Name, po.Block !== 'NA' ? po.Block : ''].filter(Boolean).join(', ');
+      const distState = [po.District, po.State].filter(Boolean).join(', ');
+      document.getElementById(areaId).value = locality;
+      document.getElementById(dsId).value   = distState;
+      document.getElementById(rowId).style.display = '';
+      document.getElementById(msgId).style.color = 'var(--success)';
+      document.getElementById(msgId).textContent  = '✓ Area fetched';
+    } else {
+      document.getElementById(msgId).style.color = 'var(--danger)';
+      document.getElementById(msgId).textContent = 'Pincode not found';
+    }
+  } catch {
+    document.getElementById(msgId).style.color = 'var(--danger)';
+    document.getElementById(msgId).textContent = 'Could not fetch — check connection';
+  } finally {
+    document.getElementById(spinnerId).style.display = 'none';
+  }
+}
+
+function previewPhoto() {
+  const file = document.getElementById('photo-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('photo-preview').innerHTML =
+      `<img src="${e.target.result}" class="student-photo">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function buildAddress(flat, line2, area, distState, pin) {
+  return [flat, line2, area, distState, pin].filter(Boolean).join(', ');
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('form-error');
+  const btn   = document.getElementById('submit-btn');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const nameVal = document.getElementById('name').value.trim();
+    if (!nameVal) throw new Error('Name is required.');
+
+    const rawPhone = document.getElementById('phone').value.trim();
+    if (!/^\d{10}$/.test(rawPhone)) throw new Error('Mobile number must be exactly 10 digits.');
+
+    const dob = document.getElementById('dob').value;
+    if (!dob) throw new Error('Date of birth is required.');
+
+    const guardianName = document.getElementById('guardian-name').value.trim();
+    if (!guardianName) throw new Error('Guardian / Parent name is required.');
+
+    const guardianPhone = document.getElementById('guardian-phone').value.trim();
+    if (!guardianPhone) throw new Error('Guardian / Parent phone is required.');
+    if (!/^\d{10}$/.test(guardianPhone)) throw new Error('Guardian phone must be exactly 10 digits.');
+
+    const addressFlat = document.getElementById('address-flat').value.trim();
+    if (!addressFlat) throw new Error('Permanent address (flat/house no) is required.');
+
+    const addressLine2        = document.getElementById('address-line2').value.trim();
+    const pincode             = document.getElementById('pincode').value.trim();
+    const addressArea         = document.getElementById('address-area').value.trim();
+    const addressDistrictState = document.getElementById('address-district-state').value.trim();
+
+    const tempSame = document.getElementById('temp-same').checked;
+    const tempAddressFlat      = tempSame ? '' : document.getElementById('temp-address-flat').value.trim();
+    const tempAddressLine2     = tempSame ? '' : document.getElementById('temp-address-line2').value.trim();
+    const tempAddressPincode   = tempSame ? '' : document.getElementById('temp-pincode').value.trim();
+    const tempAddressArea      = tempSame ? '' : document.getElementById('temp-address-area').value.trim();
+    const tempAddressDistrictState = tempSame ? '' : document.getElementById('temp-address-district-state').value.trim();
+
+    const totalFee = paiseToCurrency(document.getElementById('total-fee').value);
+    const paidFee  = paiseToCurrency(document.getElementById('paid-fee').value);
+    if (paidFee > totalFee) throw new Error('Amount paid cannot exceed the total fee.');
+
+    const photoFile = document.getElementById('photo-file').files[0];
+    let photoURL    = document.getElementById('photo-url').value;
+
+    const data = {
+      name:           nameVal,
+      phone:          rawPhone,
+      dob,
+      relation:       document.getElementById('relation').value,
+      guardianName,
+      guardianPhone,
+      addressFlat,
+      addressLine2,
+      addressArea,
+      addressDistrictState,
+      pincode,
+      address: buildAddress(addressFlat, addressLine2, addressArea, addressDistrictState, pincode),
+      tempAddressSame: tempSame,
+      tempAddressFlat,
+      tempAddressLine2,
+      tempAddressPincode,
+      tempAddressArea,
+      tempAddressDistrictState,
+      vehicleClass:   document.getElementById('vehicle-class').value,
+      vehicleRegNo:   document.getElementById('vehicle-reg-no').value.trim().toUpperCase(),
+      learnerLicenceNo:    document.getElementById('learner-licence-no').value.trim().toUpperCase(),
+      learnerLicenceExpiry: document.getElementById('learner-licence-expiry').value,
+      testPassDate:    document.getElementById('test-pass-date').value,
+      dlNumber:        document.getElementById('dl-number').value.trim().toUpperCase(),
+      dlIssueDate:     document.getElementById('dl-issue-date').value,
+      dlAuthority:     document.getElementById('dl-authority').value,
+      enrollmentDate:  document.getElementById('enrollment-date').value,
+      totalFee,
+      paidFee,
+      photoURL,
+      status: 'active'
+    };
+
+    if (studentId) {
+      if (photoFile) {
+        showToast('Uploading photo to Drive…', 'info');
+        data.photoURL = await uploadPhotoToDrive(photoFile, editingStudent.enrollmentNumber, nameVal);
+      }
+      await updateStudent(studentId, {
+        ...data,
+        balance:        data.totalFee - data.paidFee,
+        enrollmentDate: firebase.firestore.Timestamp.fromDate(new Date(data.enrollmentDate))
+      });
+      showToast('Student updated.', 'success');
+      setTimeout(() => window.location.href = `student-profile.html?id=${studentId}`, 800);
+
+    } else {
+      const student = await createStudent(data);
+
+      const referrerId   = document.getElementById('referrer-id').value;
+      const referrerName = document.getElementById('referrer-name').value;
+      const referrerCode = document.getElementById('referral-code').value.trim();
+      if (referrerId) {
+        await createReferral({
+          referrerId,
+          referrerId_enrollmentNo: referrerCode,
+          referrerName,
+          referredId:   student.id,
+          referredName: student.name
+        });
+        showToast('Student enrolled with referral discount applied.', 'success');
+      } else {
+        showToast('Student enrolled successfully.', 'success');
+      }
+
+      if (photoFile) {
+        try {
+          showToast('Uploading photo to Drive…', 'info');
+          const url = await uploadPhotoToDrive(photoFile, student.enrollmentNumber, student.name);
+          await updateStudent(student.id, { photoURL: url });
+        } catch (photoErr) {
+          showToast('Student saved. Photo upload failed: ' + photoErr.message, 'warning');
+        }
+      }
+
+      setTimeout(() => window.location.href = `student-profile.html?id=${student.id}`, 800);
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = '';
+    btn.disabled = false;
+    btn.textContent = 'Save Student';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#0f172a"/>
+  <!-- Car lower body -->
+  <rect x="6" y="36" width="52" height="10" rx="3" fill="#94a3b8"/>
+  <!-- Car cabin -->
+  <path d="M14 36 L19 25 Q22 21 29 21 L42 21 Q48 22 51 26 L55 36Z" fill="#cbd5e1"/>
+  <!-- Rear glass -->
+  <path d="M18 35 L22 26 Q24 23 27 22 L31 22 L29 35Z" fill="#3b82f6" opacity="0.8"/>
+  <!-- Middle glass -->
+  <rect x="31" y="21" width="11" height="14" fill="#3b82f6" opacity="0.8"/>
+  <!-- Front glass -->
+  <path d="M42 35 L46 27 Q48 23 51 24 L55 35Z" fill="#3b82f6" opacity="0.8"/>
+  <!-- A/B/C pillars -->
+  <rect x="29" y="21" width="2" height="15" fill="#94a3b8"/>
+  <rect x="42" y="21" width="2" height="15" fill="#94a3b8"/>
+  <!-- Front bumper extension -->
+  <path d="M55 36 L58 37 L58 43 L55 44Z" fill="#64748b"/>
+  <!-- Rear bumper -->
+  <path d="M9 36 L6 37 L6 43 L9 44Z" fill="#64748b"/>
+  <!-- Headlight -->
+  <rect x="56" y="38" width="4" height="3" rx="1.5" fill="#fef9c3"/>
+  <!-- Tail light -->
+  <rect x="4" y="38" width="4" height="3" rx="1.5" fill="#ef4444"/>
+  <!-- Door handle -->
+  <rect x="33" y="31" width="5" height="1.5" rx="0.75" fill="#64748b"/>
+  <!-- Wheels -->
+  <circle cx="19" cy="46" r="8" fill="#1e293b"/>
+  <circle cx="19" cy="46" r="5" fill="#334155"/>
+  <circle cx="19" cy="46" r="2.2" fill="#64748b"/>
+  <circle cx="45" cy="46" r="8" fill="#1e293b"/>
+  <circle cx="45" cy="46" r="5" fill="#334155"/>
+  <circle cx="45" cy="46" r="2.2" fill="#64748b"/>
+</svg>

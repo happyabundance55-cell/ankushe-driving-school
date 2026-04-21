@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referrals — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html" class="active">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+  <div class="page-title">Referral Rewards</div>
+
+  <div class="alert alert-info" style="margin-bottom:1rem">
+    <strong>How referrals work:</strong> When a referred student makes their first payment, the reward moves to
+    <em>Ready to Pay</em>. Once you pay ₹200 cash to the referrer, mark it as paid here.
+    The referred student already received their ₹200 discount on enrollment.
+  </div>
+
+  <div class="stat-grid" style="margin-bottom:1.25rem">
+    <div class="stat-card warning">
+      <div class="stat-label">Ready to Pay</div>
+      <div class="stat-value" id="stat-triggered">—</div>
+      <div class="stat-sub" id="stat-triggered-amt"></div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Total Paid Out</div>
+      <div class="stat-value" id="stat-paid">—</div>
+      <div class="stat-sub" id="stat-paid-amt"></div>
+    </div>
+    <div class="stat-card primary">
+      <div class="stat-label">Pending (awaiting payment)</div>
+      <div class="stat-value" id="stat-pending">—</div>
+    </div>
+    <div class="stat-card primary">
+      <div class="stat-label">Total Referrals</div>
+      <div class="stat-value" id="stat-total">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Referral Link Visits</div>
+    <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
+      Each entry is a prospect who opened a student's referral link. Click <strong>Enroll</strong> to open the student form with the referral pre-applied.
+    </div>
+    <div id="visits-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ready to Pay <span id="triggered-badge"></span></div>
+    <div id="triggered-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Pending (Referred student hasn't paid yet)</div>
+    <div id="pending-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Paid History</div>
+    <div id="paid-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<script>
+requireAuth(['admin']).then(loadAll);
+
+async function loadAll() {
+  loadVisits();
+  try {
+    const refs = await getReferrals();
+    const triggered = refs.filter(r => r.status === 'triggered');
+    const pending   = refs.filter(r => r.status === 'pending');
+    const paid      = refs.filter(r => r.status === 'paid');
+
+    document.getElementById('stat-triggered').textContent     = triggered.length;
+    document.getElementById('stat-triggered-amt').textContent = formatCurrency(triggered.reduce((s,r)=>s+r.rewardAmount,0));
+    document.getElementById('stat-paid').textContent          = paid.length;
+    document.getElementById('stat-paid-amt').textContent      = formatCurrency(paid.reduce((s,r)=>s+r.rewardAmount,0));
+    document.getElementById('stat-pending').textContent       = pending.length;
+    document.getElementById('stat-total').textContent         = refs.length;
+
+    document.getElementById('triggered-badge').innerHTML =
+      triggered.length > 0 ? `<span class="badge badge-warning">${triggered.length}</span>` : '';
+
+    renderList('triggered-list', triggered, true);
+    renderList('pending-list',   pending,   false);
+    renderPaid('paid-list',      paid);
+  } catch (e) {
+    ['triggered-list','pending-list','paid-list'].forEach(id => {
+      document.getElementById(id).innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    });
+  }
+}
+
+function renderList(elId, refs, showPayBtn) {
+  const el = document.getElementById(elId);
+  if (!refs.length) { el.innerHTML = '<div class="empty-state"><h3>None</h3></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Referrer</th><th>Enrollment No</th><th>Referred Student</th>
+      <th>Discount Given</th><th>Reward</th><th>Since</th>
+      ${showPayBtn ? '<th></th>' : ''}
+    </tr></thead>
+    <tbody>
+      ${refs.map(r => `<tr>
+        <td><strong>${escapeHtml(r.referrerName)}</strong></td>
+        <td class="td-muted">${escapeHtml(r.referrerId_enrollmentNo)}</td>
+        <td>${escapeHtml(r.referredName)}</td>
+        <td class="td-amount" style="color:var(--primary)">${formatCurrency(r.discountAmount)}</td>
+        <td class="td-amount" style="color:var(--success);font-weight:600">${formatCurrency(r.rewardAmount)}</td>
+        <td class="td-muted">${formatDate(r.createdAt)}</td>
+        ${showPayBtn ? `<td><button class="btn btn-sm btn-success" onclick="payReward('${r.id}')">Mark Paid</button></td>` : ''}
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function renderPaid(elId, refs) {
+  const el = document.getElementById(elId);
+  if (!refs.length) { el.innerHTML = '<div class="empty-state"><h3>No paid rewards yet</h3></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Referrer</th><th>Referred Student</th><th>Amount Paid</th><th>Paid On</th></tr></thead>
+    <tbody>
+      ${refs.map(r => `<tr>
+        <td>${escapeHtml(r.referrerName)}</td>
+        <td>${escapeHtml(r.referredName)}</td>
+        <td class="td-amount" style="color:var(--success)">${formatCurrency(r.rewardAmount)}</td>
+        <td class="td-muted">${formatDate(r.paidAt)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+async function loadVisits() {
+  const el = document.getElementById('visits-list');
+  try {
+    const visits = await getReferralVisits();
+    if (!visits.length) { el.innerHTML = '<div class="empty-state"><h3>No referral link visits yet</h3></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Referrer</th><th>Enrollment No</th><th>Visited On</th><th></th></tr></thead>
+      <tbody>
+        ${visits.map(v => `<tr>
+          <td><strong>${escapeHtml(v.referrerName)}</strong></td>
+          <td class="td-muted">${escapeHtml(v.enrollmentNo)}</td>
+          <td class="td-muted">${formatDateTime(v.clickedAt)}</td>
+          <td><a href="student-form.html?ref=${encodeURIComponent(v.refCode)}" class="btn btn-sm btn-primary">Enroll</a></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+async function payReward(referralId) {
+  if (!confirm('Confirm you have paid ₹200 to the referrer?')) return;
+  try {
+    await markReferralPaid(referralId);
+    showToast('Reward marked as paid.', 'success');
+    loadAll();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+</script>
+</body>
+</html>

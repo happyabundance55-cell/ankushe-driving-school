@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .section-title {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 1.5rem 0 .6rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .metric-card {
+      background: rgba(255,255,255,.72);
+      border: 1px solid rgba(196,124,5,.22);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+      box-shadow:
+        inset 0 1px 0 rgba(255,220,120,.55),
+        inset 1px 0 0 rgba(255,210,100,.3),
+        inset 0 -1px 0 rgba(100,55,5,.14),
+        inset -1px 0 0 rgba(100,55,5,.1),
+        0 2px 8px rgba(100,55,5,.08);
+    }
+    .metric-card .m-label {
+      font-size: .75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metric-card .m-value {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.15;
+    }
+    .metric-card .m-prev {
+      font-size: .78rem;
+      color: var(--text-muted);
+    }
+    .metric-card .m-change {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-top: .1rem;
+    }
+    .m-change.up   { color: var(--success); }
+    .m-change.down { color: var(--danger); }
+    .m-change.flat { color: var(--text-muted); }
+    .fin-primary {
+      border-left: 4px solid var(--primary);
+    }
+    .fin-prev {
+      border-left: 4px solid var(--primary-muted);
+    }
+    .ops-enroll  { border-left: 4px solid var(--primary); }
+    .ops-instr   { border-left: 4px solid var(--primary-dark); }
+    .ops-att     { border-left: 4px solid #8a5a02; }
+    .dash-tile   { min-height: 100px; display:flex; flex-direction:column; justify-content:center; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/storage.js"></script>
+  <script src="../shared/js/drive.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    .chart-toggle { display:flex; border:1.5px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
+    .chart-toggle-btn {
+      padding:.32rem .85rem; font-size:.8rem; font-weight:600; font-family:inherit;
+      background:none; border:none; cursor:pointer; color:var(--text-muted);
+      transition:background var(--transition),color var(--transition);
+    }
+    .chart-toggle-btn + .chart-toggle-btn { border-left:1.5px solid var(--border); }
+    .chart-toggle-btn.active { background:var(--nav-bg); color:#f1f5f9; }
+  </style>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html" class="active">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+
+  <!-- ── Page title ───────────────────────────────────────────── -->
+  <div class="page-title" style="margin-bottom:.6rem">Dashboard</div>
+
+  <!-- ── Period selector (below title) ────────────────────────── -->
+  <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem">
+    <select id="period-select" onchange="onPeriodChange()" style="font-size:.8rem;padding:.28rem .55rem;border:1.5px solid rgba(255,255,255,.55);border-radius:var(--radius-pill);background:rgba(255,255,255,.62);backdrop-filter:blur(8px);color:var(--text);font-family:inherit;cursor:pointer;box-shadow:var(--shadow-sm);width:auto;max-width:220px">
+      <option value="today">Today vs Yesterday</option>
+      <option value="week">This Week vs Last Week</option>
+      <option value="month" selected>This Month vs Last Month</option>
+      <option value="3months">Last 3 Months vs Prev 3 Months</option>
+      <option value="quarter">This Quarter vs Last Quarter</option>
+      <option value="fy">This FY vs Last FY</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <input type="date" id="custom-start" style="display:none;font-size:.8rem;padding:.28rem .55rem;border:1.5px solid var(--border);border-radius:var(--radius-pill);background:var(--white);color:var(--text);font-family:inherit;width:auto">
+    <input type="date" id="custom-end"   style="display:none;font-size:.8rem;padding:.28rem .55rem;border:1.5px solid var(--border);border-radius:var(--radius-pill);background:var(--white);color:var(--text);font-family:inherit;width:auto">
+    <button class="btn btn-primary btn-sm" id="apply-btn" onclick="loadDashboard()" style="display:none;border-radius:var(--radius-pill)">Apply</button>
+    <span style="font-size:.75rem;color:var(--text);font-weight:500;background:rgba(255,255,255,.62);backdrop-filter:blur(8px);padding:.2rem .65rem;border-radius:var(--radius-pill);border:1px solid rgba(255,255,255,.55)" id="period-label"></span>
+  </div>
+
+  <!-- ── Row 1: Financial tiles ───────────────────────────────── -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;margin-bottom:1rem">
+    <div class="metric-card fin-primary dash-tile">
+      <div class="m-label">Revenue</div>
+      <div class="m-value" id="fin-cur" style="margin-top:.2rem">—</div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem" id="fin-cur-count"></div>
+      <div style="font-size:.78rem;color:var(--text-subtle);margin-top:.4rem;line-height:1.5" id="fin-prev-line">—</div>
+    </div>
+    <div class="metric-card dash-tile" style="border-left:4px solid var(--danger)">
+      <div class="m-label">Outstanding</div>
+      <div class="m-value" id="stat-outstanding" style="color:var(--danger);margin-top:.2rem">—</div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem" id="stat-outstanding-count"></div>
+    </div>
+  </div>
+
+  <!-- ── Row 2: Chart ───────────────────────────────────────────── -->
+  <div class="chart-wrap" style="margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.1rem;flex-wrap:wrap">
+      <div class="chart-title" style="margin:0">Revenue Collections</div>
+      <div class="chart-toggle">
+        <button id="toggle-bar"  class="chart-toggle-btn active" onclick="setChartType('bar')">▐▐ Bar</button>
+        <button id="toggle-line" class="chart-toggle-btn"        onclick="setChartType('line')">∿ Line</button>
+      </div>
+    </div>
+    <div style="position:relative;height:230px">
+      <canvas id="revenue-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Row 3: Clubbed quant tiles ───────────────────────────── -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;margin-bottom:1.25rem;align-items:stretch">
+
+    <!-- Students -->
+    <div class="metric-card ops-enroll dash-tile">
+      <div class="m-label">Students</div>
+      <div class="m-value" id="ov-active-students">—</div>
+      <div class="m-prev" style="margin-top:.15rem">
+        <span id="ov-total-students">—</span> total &nbsp;·&nbsp;
+        <span id="ops-enroll-cur">—</span> new this period
+      </div>
+      <div class="m-prev" id="ov-inactive-students" style="margin-top:.1rem"></div>
+      <!-- hidden elements required by JS outerHTML replacement -->
+      <span id="ops-enroll-prev" style="display:none"></span>
+      <div id="ops-enroll-change" style="display:none"></div>
+    </div>
+
+    <!-- Instructors -->
+    <div class="metric-card ops-instr dash-tile">
+      <div class="m-label">Instructors</div>
+      <div class="m-value" id="ov-total-instructors">—</div>
+      <div class="m-prev" style="margin-top:.15rem">
+        <span id="ops-instr-cur">—</span> joined this period
+      </div>
+      <div class="m-prev" id="ov-inactive-instructors" style="margin-top:.1rem"></div>
+      <span id="ops-instr-prev" style="display:none"></span>
+      <div id="ops-instr-change" style="display:none"></div>
+    </div>
+
+    <!-- Attendance -->
+    <div class="metric-card ops-att dash-tile">
+      <div class="m-label">Attendance Sessions</div>
+      <div class="m-value" id="ops-att-cur">—</div>
+      <div class="m-prev" id="ops-att-prev" style="margin-top:.15rem"></div>
+      <div id="ops-att-change" style="margin-top:.1rem">—</div>
+    </div>
+
+  </div>
+
+  <!-- ── Outstanding balances ──────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Outstanding Balances <span id="outstanding-badge"></span></div>
+    <div id="outstanding-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- ── Pending referral rewards ──────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Pending Referral Rewards</div>
+    <div id="referral-pending-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- ── Photo archival ────────────────────────────────────────── -->
+  <div class="card" id="archive-card" style="display:none">
+    <div class="card-title">Photo Archival</div>
+    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:1rem">
+      Photos from students enrolled more than <strong>${PHOTO_ARCHIVE_MONTHS} months ago</strong>
+      are moved from Firebase Storage to Google Drive to save storage space.
+    </p>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-outline" id="connect-drive-btn" onclick="connectDrive()">
+        Connect Google Drive
+      </button>
+      <button class="btn btn-warning" id="archive-btn" onclick="runArchive()" style="display:none">
+        Archive Old Photos
+      </button>
+    </div>
+    <div id="archive-status" style="margin-top:.75rem;font-size:.875rem"></div>
+  </div>
+
+</div>
+
+<script>
+let _allStudents = [], _allInstructors = [];
+
+requireAuth(['admin']).then(({ profile }) => {
+  if (profile.role === 'admin') {
+    document.getElementById('archive-card').style.display = '';
+    if (getDriveToken()) showArchiveButton();
+  }
+  loadOverview();
+  loadDashboard();
+  loadOutstanding();
+  loadPendingReferrals();
+});
+
+// ── Overview ────────────────────────────────────────────────────────────────
+
+async function loadOverview() {
+  [_allStudents, _allInstructors] = await Promise.all([
+    getStudents({ status: 'all' }),
+    getMentors()
+  ]);
+
+  const totalS    = _allStudents.length;
+  const activeS   = _allStudents.filter(s => s.status === 'active').length;
+  const inactiveS = totalS - activeS;
+  const totalI    = _allInstructors.length;
+  const activeI   = _allInstructors.filter(i => (i.status || 'active') === 'active').length;
+  const inactiveI = totalI - activeI;
+
+  document.getElementById('ov-total-students').textContent    = totalS;
+  document.getElementById('ov-active-students').textContent   = activeS;
+  document.getElementById('ov-inactive-students').textContent = inactiveS ? `${inactiveS} inactive` : 'all active';
+  document.getElementById('ov-total-instructors').textContent = totalI;
+  document.getElementById('ov-inactive-instructors').textContent =
+    `${activeI} active${inactiveI ? `, ${inactiveI} inactive` : ''}`;
+}
+
+// ── Period helpers ──────────────────────────────────────────────────────────
+
+function startOfDay(d) { const r = new Date(d); r.setHours(0,0,0,0); return r; }
+function endOfDay(d)   { const r = new Date(d); r.setHours(23,59,59,999); return r; }
+
+function getCurrentFYStart(from) {
+  const d = from || new Date();
+  const m = d.getMonth(); // 0-based
+  const y = d.getFullYear();
+  return new Date(m >= 3 ? y : y - 1, 3, 1); // April = month 3
+}
+
+function getCurrentQuarter(from) {
+  const d  = from || new Date();
+  const m  = d.getMonth();
+  const y  = d.getFullYear();
+  const fyYear = m >= 3 ? y : y - 1;
+  // quarters relative to financial year April start
+  const mInFY = (m - 3 + 12) % 12; // months since April (0-based)
+  const q = Math.floor(mInFY / 3); // 0=Q1 Apr-Jun, 1=Q2 Jul-Sep, 2=Q3 Oct-Dec, 3=Q4 Jan-Mar
+  const qStartMonths = [3, 6, 9, 0]; // April=3, July=6, Oct=9, Jan=0
+  const qEndMonths   = [5, 8, 11, 2]; // June=5, Sep=8, Dec=11, Mar=2
+  const startY = q === 3 ? fyYear + 1 : fyYear;
+  const endY   = q === 3 ? fyYear + 1 : fyYear;
+  return {
+    start: startOfDay(new Date(startY, qStartMonths[q], 1)),
+    end:   endOfDay(new Date(endY, qEndMonths[q] + 1, 0)) // last day of month
+  };
+}
+
+function getPreviousQuarter(curQ) {
+  // go back one day from curQ.start to land in the previous quarter
+  const prevDate = new Date(curQ.start.getTime() - 86400000);
+  return getCurrentQuarter(prevDate);
+}
+
+function getPeriods() {
+  const preset = document.getElementById('period-select').value;
+  let current, previous;
+  const now = new Date();
+
+  if (preset === 'custom') {
+    const s = document.getElementById('custom-start').value;
+    const e = document.getElementById('custom-end').value;
+    if (!s || !e) return null;
+    const start = startOfDay(new Date(s));
+    const end   = endOfDay(new Date(e));
+    const span  = end - start;
+    current  = { start, end };
+    previous = { start: new Date(start - span - 1), end: new Date(start - 1) };
+
+  } else if (preset === 'today') {
+    current  = { start: startOfDay(now), end: endOfDay(now) };
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+    previous = { start: startOfDay(yesterday), end: endOfDay(yesterday) };
+
+  } else if (preset === 'week') {
+    const dow  = now.getDay();
+    const mon  = new Date(now); mon.setDate(now.getDate() - ((dow + 6) % 7));
+    const sun  = new Date(mon); sun.setDate(mon.getDate() + 6);
+    current  = { start: startOfDay(mon), end: endOfDay(sun) };
+    const prevMon = new Date(mon); prevMon.setDate(mon.getDate() - 7);
+    const prevSun = new Date(prevMon); prevSun.setDate(prevMon.getDate() + 6);
+    previous = { start: startOfDay(prevMon), end: endOfDay(prevSun) };
+
+  } else if (preset === 'month') {
+    const s = new Date(now.getFullYear(), now.getMonth(), 1);
+    const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    current  = { start: startOfDay(s), end: endOfDay(e) };
+    const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const pe = new Date(now.getFullYear(), now.getMonth(), 0);
+    previous = { start: startOfDay(ps), end: endOfDay(pe) };
+
+  } else if (preset === '3months') {
+    const end3   = endOfDay(now);
+    const start3 = startOfDay(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()));
+    current  = { start: start3, end: end3 };
+    const prev3End   = new Date(start3.getTime() - 1);
+    const prev3Start = startOfDay(new Date(prev3End.getFullYear(), prev3End.getMonth() - 3, prev3End.getDate()));
+    previous = { start: prev3Start, end: endOfDay(prev3End) };
+
+  } else if (preset === 'quarter') {
+    current  = getCurrentQuarter(now);
+    previous = getPreviousQuarter(current);
+
+  } else if (preset === 'fy') {
+    const fyStart = getCurrentFYStart(now);
+    const fyEnd   = endOfDay(new Date(fyStart.getFullYear() + 1, 2, 31)); // Mar 31 next year
+    current  = { start: fyStart, end: fyEnd };
+    const prevFyStart = new Date(fyStart.getFullYear() - 1, 3, 1);
+    const prevFyEnd   = endOfDay(new Date(fyStart.getFullYear(), 2, 31));
+    previous = { start: prevFyStart, end: prevFyEnd };
+  }
+
+  return { current, previous };
+}
+
+// ── Change badge helper ─────────────────────────────────────────────────────
+
+function changeHtml(cur, prev, isCurrency) {
+  if (prev === 0 && cur === 0) return '<span class="m-change flat">— no change</span>';
+  const diff = cur - prev;
+  const pct  = prev > 0 ? Math.round((diff / prev) * 100) : (cur > 0 ? 100 : 0);
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
+  const cls   = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+  const diffDisplay = isCurrency ? formatCurrency(Math.abs(diff)) : Math.abs(diff);
+  return `<span class="m-change ${cls}">${arrow} ${Math.abs(pct)}%</span>
+          <span style="font-size:.75rem;color:var(--text-muted)">&nbsp;${diffDisplay} vs prev</span>`;
+}
+
+// ── Compact number formatter (k / L) ────────────────────────────────────────
+
+function fmtCompact(paise) {
+  const r = paise / 100;
+  if (r >= 100000) return '₹' + (r / 100000).toFixed(2) + 'L';
+  if (r >= 1000)   return '₹' + (r / 1000).toFixed(2) + 'k';
+  return '₹' + r.toFixed(2);
+}
+
+// ── Period label ────────────────────────────────────────────────────────────
+
+function fmtShort(d) {
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+}
+
+function setPeriodLabel(cur, prev) {
+  const presetNames = {
+    today:    'Today vs Yesterday',
+    week:     'This Week vs Last Week',
+    month:    'This Month vs Last Month',
+    '3months':'Last 3 Months vs Previous 3 Months',
+    quarter:  'This Quarter vs Last Quarter',
+    fy:       'This Financial Year vs Last FY',
+    custom:   'Custom Range'
+  };
+  const preset = document.getElementById('period-select').value;
+  document.getElementById('period-label').textContent =
+    `${presetNames[preset]} · ${fmtShort(cur.start)} – ${fmtShort(cur.end)}`;
+}
+
+// ── Main dashboard ──────────────────────────────────────────────────────────
+
+function onPeriodChange() {
+  const val = document.getElementById('period-select').value;
+  const isCustom = val === 'custom';
+  document.getElementById('custom-start').style.display = isCustom ? '' : 'none';
+  document.getElementById('custom-end').style.display   = isCustom ? '' : 'none';
+  document.getElementById('apply-btn').style.display    = isCustom ? '' : 'none';
+  if (!isCustom) loadDashboard();
+}
+
+async function loadDashboard() {
+  const periods = getPeriods();
+  if (!periods) return;
+  const { current, previous } = periods;
+
+  setPeriodLabel(current, previous);
+
+  ['fin-cur','ops-enroll-cur','ops-instr-cur','ops-att-cur'].forEach(id => {
+    document.getElementById(id).textContent = '…';
+  });
+
+  const [cur, prev, curAtt, prevAtt] = await Promise.all([
+    getRevenueSummary(current.start, current.end),
+    getRevenueSummary(previous.start, previous.end),
+    getAllAttendance({ startDate: current.start,  endDate: current.end }),
+    getAllAttendance({ startDate: previous.start, endDate: previous.end })
+  ]);
+
+  // Financial
+  document.getElementById('fin-cur').textContent       = fmtCompact(cur.total);
+  document.getElementById('fin-cur-count').textContent = `${cur.count} payment${cur.count !== 1 ? 's' : ''}`;
+
+  const _pctRaw  = prev.total ? ((cur.total - prev.total) / prev.total) * 100 : null;
+  const _pct     = _pctRaw !== null ? Math.abs(_pctRaw).toFixed(1) : null;
+  const _arrow   = _pctRaw === null ? '' : _pctRaw > 0 ? '▲' : _pctRaw < 0 ? '▼' : '—';
+  const _clr     = _pctRaw > 0 ? 'var(--success)' : _pctRaw < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+  const _prevTxt = prev.total ? fmtCompact(prev.total) : '—';
+  const _pctSpan = _pct !== null
+    ? `&ensp;<span style="color:${_clr};font-weight:700">${_arrow} ${_pct}%</span>`
+    : '';
+  document.getElementById('fin-prev-line').innerHTML =
+    `vs ${_prevTxt} prev${_pctSpan}`;
+
+  // Helpers for date range check
+  function inRange(dateVal, s, e) {
+    const d = dateVal?.toDate ? dateVal.toDate() : new Date(dateVal);
+    return d >= s && d <= e;
+  }
+
+  // Enrollments
+  const newSCur  = _allStudents.filter(s => inRange(s.enrollmentDate, current.start,  current.end)).length;
+  const newSPrev = _allStudents.filter(s => inRange(s.enrollmentDate, previous.start, previous.end)).length;
+  document.getElementById('ops-enroll-cur').textContent  = newSCur;
+  document.getElementById('ops-enroll-prev').textContent = `${newSPrev} in prev period`;
+  document.getElementById('ops-enroll-change').outerHTML =
+    `<div id="ops-enroll-change">${changeHtml(newSCur, newSPrev, false)}</div>`;
+
+  // Instructors
+  const newICur  = _allInstructors.filter(i => inRange(i.joiningDate || i.createdAt, current.start,  current.end)).length;
+  const newIPrev = _allInstructors.filter(i => inRange(i.joiningDate || i.createdAt, previous.start, previous.end)).length;
+  document.getElementById('ops-instr-cur').textContent  = newICur;
+  document.getElementById('ops-instr-prev').textContent = `${newIPrev} in prev period`;
+  document.getElementById('ops-instr-change').outerHTML =
+    `<div id="ops-instr-change">${changeHtml(newICur, newIPrev, false)}</div>`;
+
+  // Attendance
+  document.getElementById('ops-att-cur').textContent  = curAtt.length;
+  document.getElementById('ops-att-prev').textContent = `${prevAtt.length} in prev period`;
+  document.getElementById('ops-att-change').outerHTML =
+    `<div id="ops-att-change">${changeHtml(curAtt.length, prevAtt.length, false)}</div>`;
+
+  renderChart(cur.payments, prev.payments, current, previous);
+}
+
+// ── Chart (Chart.js) ────────────────────────────────────────────────────────
+
+let _chart = null;
+let _chartType = 'bar';
+let _lastChartArgs = null;
+
+function setChartType(type) {
+  _chartType = type;
+  document.getElementById('toggle-bar').classList.toggle('active',  type === 'bar');
+  document.getElementById('toggle-line').classList.toggle('active', type === 'line');
+  if (_lastChartArgs) renderChart(..._lastChartArgs);
+}
+
+function groupByKey(payments, useMonths) {
+  const map = {};
+  payments.forEach(p => {
+    const d = p.date.toDate ? p.date.toDate() : new Date(p.date);
+    const key = useMonths
+      ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+      : d.toISOString().slice(0, 10);
+    map[key] = (map[key] || 0) + p.amount;
+  });
+  return map;
+}
+
+function buildSlots(start, end, useMonths) {
+  const slots = [];
+  if (useMonths) {
+    let d = new Date(start.getFullYear(), start.getMonth(), 1);
+    const cap = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (d <= cap) {
+      slots.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      d = new Date(d.getFullYear(), d.getMonth()+1, 1);
+    }
+  } else {
+    let d = new Date(start); d.setHours(0,0,0,0);
+    const e = new Date(end);  e.setHours(23,59,59,999);
+    while (d <= e) {
+      slots.push(d.toISOString().slice(0,10));
+      d.setDate(d.getDate()+1);
+    }
+  }
+  return slots;
+}
+
+function slotLabel(key, useMonths) {
+  return useMonths
+    ? new Date(key+'-01').toLocaleDateString('en-IN', { month:'short', year:'2-digit' })
+    : new Date(key).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+
+function renderChart(curPayments, prevPayments, current, previous) {
+  _lastChartArgs = [curPayments, prevPayments, current, previous];
+
+  const days      = Math.round((current.end - current.start) / 86400000) + 1;
+  const useMonths = days > 60;
+
+  const curSlots  = buildSlots(current.start,  current.end,  useMonths);
+  const prevSlots = buildSlots(previous.start, previous.end, useMonths);
+  const curMap    = groupByKey(curPayments,  useMonths);
+  const prevMap   = groupByKey(prevPayments, useMonths);
+
+  const labels  = curSlots.map(k => slotLabel(k, useMonths));
+  const curData = curSlots.map(k  => Math.round((curMap[k]  || 0) / 100));
+  const prevRaw = prevSlots.map(k => Math.round((prevMap[k] || 0) / 100));
+  // Align previous data to same length as current slots
+  while (prevRaw.length < curData.length) prevRaw.push(0);
+  const prevData = prevRaw.slice(0, curData.length);
+
+  const canvas = document.getElementById('revenue-chart');
+  if (!canvas) return;
+  if (_chart) { _chart.destroy(); _chart = null; }
+
+  const isLine = _chartType === 'line';
+
+  _chart = new Chart(canvas, {
+    type: _chartType,
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Previous Period',
+          data: prevData,
+          backgroundColor: isLine ? 'rgba(148,163,184,.07)' : 'rgba(203,213,225,.75)',
+          borderColor: '#94a3b8',
+          borderWidth: isLine ? 2 : 0,
+          borderRadius: isLine ? 0 : 5,
+          tension: 0.42,
+          fill: isLine,
+          borderDash: isLine ? [6,4] : [],
+          pointBackgroundColor: '#94a3b8',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: isLine ? 3 : 0,
+          pointHoverRadius: 7,
+          pointHoverBackgroundColor: '#64748b',
+        },
+        {
+          label: 'Current Period',
+          data: curData,
+          backgroundColor: isLine ? 'rgba(15,23,42,.07)' : 'rgba(15,23,42,.82)',
+          borderColor: '#0f172a',
+          borderWidth: isLine ? 2.5 : 0,
+          borderRadius: isLine ? 0 : 5,
+          tension: 0.42,
+          fill: isLine,
+          pointBackgroundColor: '#0f172a',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: isLine ? 4 : 0,
+          pointHoverRadius: 8,
+          pointHoverBackgroundColor: '#0f172a',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2.5,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 400, easing: 'easeInOutQuart' },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: {
+            font: { family: 'Inter', size: 12, weight: '600' },
+            color: '#64748b',
+            boxWidth: 10, boxHeight: 10,
+            borderRadius: 3,
+            padding: 16,
+            usePointStyle: isLine,
+          }
+        },
+        tooltip: {
+          backgroundColor: '#0f172a',
+          titleColor: '#94a3b8',
+          bodyColor: '#f1f5f9',
+          borderColor: 'rgba(255,255,255,.1)',
+          borderWidth: 1,
+          padding: 13,
+          cornerRadius: 10,
+          displayColors: true,
+          boxWidth: 9, boxHeight: 9,
+          callbacks: {
+            title: items => items[0].label,
+            label: ctx => `  ${ctx.dataset.label}:  ₹${ctx.parsed.y.toLocaleString('en-IN')}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: true, color: '#000000', width: 1 },
+          ticks: {
+            font: { family: 'Inter', size: 11 },
+            color: '#a0722a',
+            maxRotation: 45,
+            autoSkip: true,
+            maxTicksLimit: 14,
+          }
+        },
+        y: {
+          position: 'left',
+          grid: { color: '#f1f5f9' },
+          border: { display: false, dash: [4,4] },
+          beginAtZero: true,
+          ticks: {
+            font: { family: 'Inter', size: 11 },
+            color: '#a0722a',
+            maxTicksLimit: 6,
+            callback: v => v >= 1000
+              ? '₹' + (v/1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'K'
+              : '₹' + v,
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Outstanding ─────────────────────────────────────────────────────────────
+
+async function loadOutstanding() {
+  const el = document.getElementById('outstanding-list');
+  try {
+    const students = await getOutstandingBalances();
+    document.getElementById('outstanding-badge').innerHTML =
+      students.length > 0 ? `<span class="badge badge-danger">${students.length}</span>` : '';
+    const totalOutstanding = students.reduce((s, st) => s + st.balance, 0);
+    document.getElementById('stat-outstanding').textContent       = fmtCompact(totalOutstanding);
+    document.getElementById('stat-outstanding-count').textContent = `${students.length} student${students.length !== 1 ? 's' : ''}`;
+
+    if (!students.length) { el.innerHTML = '<div class="empty-state"><h3>No outstanding balances</h3></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Student</th><th>Enrollment No</th><th>Total Fee</th><th>Paid</th><th>Balance</th><th></th></tr></thead>
+      <tbody>
+        ${students.map(st => `<tr>
+          <td>${escapeHtml(st.name)}</td>
+          <td class="td-muted">${escapeHtml(st.enrollmentNumber)}</td>
+          <td class="td-amount">${formatCurrency(st.totalFee)}</td>
+          <td class="td-amount">${formatCurrency(st.paidFee)}</td>
+          <td class="td-amount" style="color:var(--danger);font-weight:600">${formatCurrency(st.balance)}</td>
+          <td><a href="fees.html?id=${st.id}" class="btn btn-sm btn-outline">Record Payment</a></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+// ── Pending referrals ───────────────────────────────────────────────────────
+
+async function loadPendingReferrals() {
+  const el = document.getElementById('referral-pending-list');
+  try {
+    const refs    = await getReferrals();
+    const pending = refs.filter(r => r.status === 'triggered');
+    if (!pending.length) { el.innerHTML = '<div class="empty-state"><h3>No pending rewards</h3></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Referrer</th><th>Referred Student</th><th>Reward</th><th></th></tr></thead>
+      <tbody>
+        ${pending.map(r => `<tr>
+          <td>${escapeHtml(r.referrerName)}<br><span class="td-muted">${escapeHtml(r.referrerId_enrollmentNo)}</span></td>
+          <td>${escapeHtml(r.referredName)}</td>
+          <td class="td-amount" style="color:var(--success);font-weight:600">${formatCurrency(r.rewardAmount)}</td>
+          <td><a href="referrals.html" class="btn btn-sm btn-success">Mark Paid</a></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+// ── Drive archival ──────────────────────────────────────────────────────────
+
+function showArchiveButton() {
+  document.getElementById('connect-drive-btn').style.display = 'none';
+  document.getElementById('archive-btn').style.display = '';
+}
+
+function connectDrive() {
+  requestDriveToken(
+    () => { showArchiveButton(); showToast('Google Drive connected.', 'success'); },
+    (err) => showToast(err.message, 'danger')
+  );
+}
+
+async function runArchive() {
+  const btn    = document.getElementById('archive-btn');
+  const status = document.getElementById('archive-status');
+  btn.disabled = true;
+  btn.textContent = 'Archiving…';
+  status.innerHTML = '<div class="loading" style="display:inline-flex;gap:.5rem"><div class="spinner"></div> Working…</div>';
+
+  try {
+    const result = await archiveOldPhotos(({ archived, total }) => {
+      status.textContent = `Archived ${archived} of ${total}…`;
+    });
+    status.innerHTML = `<span style="color:var(--success)">Done — ${result.archived} photo${result.archived !== 1 ? 's' : ''} archived.</span>` +
+      (result.errors.length ? `<br><span style="color:var(--danger)">${result.errors.join('; ')}</span>` : '');
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Archive Old Photos';
+  }
+}
+</script>
+</body>
+</html>

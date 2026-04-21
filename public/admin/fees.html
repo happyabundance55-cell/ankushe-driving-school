@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fees — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <style>
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); font-size:.9rem; font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light); color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+  </style>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html" class="active">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+  <div class="page-title">Fee Management</div>
+
+  <!-- Student selector -->
+  <div class="card">
+    <div class="card-title">Select Student</div>
+    <div>
+      <select id="student-select" style="max-width:380px">
+        <option value="">— Select a student —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Student fee summary (shown after selecting) -->
+  <div id="fee-panel" style="display:none">
+    <div class="card">
+      <div class="card-title" id="student-name-title">Fee Summary</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem;margin-bottom:1rem">
+        <div class="stat-card primary">
+          <div class="stat-label">Total Fee</div>
+          <div class="stat-value" id="fee-total">—</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">Amount Paid</div>
+          <div class="stat-value" id="fee-paid">—</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="stat-label">Balance Due</div>
+          <div class="stat-value" id="fee-balance">—</div>
+        </div>
+      </div>
+      <details style="margin-top:.75rem" id="adjust-details">
+        <summary style="cursor:pointer;font-size:.875rem;color:var(--primary);font-weight:600">Adjust Total Fee</summary>
+        <div style="margin-top:.75rem;display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label style="font-size:.8rem;display:block;margin-bottom:.25rem">New Total (₹)</label>
+            <input type="number" id="new-total-fee" min="0" step="1" style="width:150px">
+          </div>
+          <div style="flex:1;min-width:180px">
+            <label style="font-size:.8rem;display:block;margin-bottom:.25rem">Reason (optional)</label>
+            <input type="text" id="adjust-note" placeholder="e.g. Discount applied">
+          </div>
+          <button class="btn btn-warning btn-sm" onclick="updateTotalFee()">Update Fee</button>
+        </div>
+      </details>
+
+      <!-- Fee adjustment history -->
+      <div id="adjustment-history" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:.75rem">
+        <div style="font-size:.8rem;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em">Fee Adjustment History</div>
+        <div id="adjustment-list"></div>
+      </div>
+    </div>
+
+    <!-- Record payment -->
+    <div class="card">
+      <div class="card-title">Record Payment</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Amount (₹) *</label>
+          <input type="number" id="pay-amount" min="1" step="1" placeholder="e.g. 1500">
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select id="pay-method">
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note (optional)</label>
+        <input type="text" id="pay-note" placeholder="e.g. Second instalment">
+      </div>
+      <div id="pay-error" class="alert alert-danger" style="display:none"></div>
+      <button class="btn btn-success" onclick="submitPayment()">Record Payment</button>
+    </div>
+
+    <!-- Payment history -->
+    <div class="card">
+      <div class="card-title">Payment History</div>
+      <div id="payment-history"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- All outstanding balances -->
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-title">All Outstanding Balances</div>
+    <div id="outstanding-list"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<script>
+let _selectedStudentId = null;
+let _allStudents       = [];
+let _ts = null;
+
+requireAuth(['admin']).then(async () => {
+  _allStudents = await getStudents({ status: 'all' });
+  const sel = document.getElementById('student-select');
+  _allStudents.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.enrollmentNumber})`;
+    sel.appendChild(opt);
+  });
+
+  _ts = new TomSelect(sel, {
+    placeholder: '— Type to search student —',
+    allowEmptyOption: true,
+    create: false,
+    maxOptions: null,
+    onChange: () => onStudentChange(),
+  });
+
+  new TomSelect('#pay-method', { create: false, maxOptions: null });
+
+  const preId = getQueryParam('id');
+  if (preId) { _ts.setValue(preId); }
+
+  loadOutstanding();
+});
+
+async function onStudentChange() {
+  const id = document.getElementById('student-select').value;
+  if (!id) { document.getElementById('fee-panel').style.display = 'none'; return; }
+  _selectedStudentId = id;
+  document.getElementById('fee-panel').style.display = '';
+  await loadStudentFees(id);
+}
+
+async function loadStudentFees(id) {
+  const s = await getStudent(id);
+  if (!s) return;
+  document.getElementById('student-name-title').textContent = `Fee Summary — ${s.name}`;
+  document.getElementById('fee-total').textContent   = formatCurrency(s.totalFee);
+  document.getElementById('fee-paid').textContent    = formatCurrency(s.paidFee);
+  const balEl = document.getElementById('fee-balance');
+  balEl.textContent = formatCurrency(s.balance);
+  balEl.style.color = s.balance > 0 ? 'var(--danger)' : 'var(--success)';
+  document.getElementById('new-total-fee').value = s.totalFee / 100;
+  await Promise.all([ loadPaymentHistory(id), loadAdjustmentHistory(id) ]);
+}
+
+async function loadAdjustmentHistory(id) {
+  const histEl  = document.getElementById('adjustment-history');
+  const listEl  = document.getElementById('adjustment-list');
+  try {
+    const records = await getFeeAdjustments(id);
+    if (!records.length) { histEl.style.display = 'none'; return; }
+    histEl.style.display = '';
+    listEl.innerHTML = records.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.85rem">
+        <div>
+          <span style="color:var(--text-muted);text-decoration:line-through">${formatCurrency(r.oldTotal)}</span>
+          <span style="margin:0 .4rem;color:var(--text-muted)">→</span>
+          <strong>${formatCurrency(r.newTotal)}</strong>
+          ${r.note ? `<span style="color:var(--text-muted);margin-left:.5rem">· ${escapeHtml(r.note)}</span>` : ''}
+        </div>
+        <div style="color:var(--text-muted);white-space:nowrap;margin-left:.75rem">${formatDateTime(r.adjustedAt)}</div>
+      </div>`).join('');
+  } catch { histEl.style.display = 'none'; }
+}
+
+async function loadPaymentHistory(id) {
+  const el = document.getElementById('payment-history');
+  try {
+    const payments = await getStudentPayments(id);
+    if (!payments.length) { el.innerHTML = '<div class="empty-state"><h3>No payments recorded</h3></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Date &amp; Time</th><th>Amount</th><th>Method</th><th>Note</th></tr></thead>
+      <tbody>
+        ${payments.map(p => `<tr>
+          <td>${formatDateTime(p.date)}</td>
+          <td class="td-amount" style="color:var(--success)">${formatCurrency(p.amount)}</td>
+          <td>${escapeHtml(p.method)}</td>
+          <td class="td-muted">${escapeHtml(p.note || '—')}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--bg);font-weight:600">
+          <td>Total Paid</td>
+          <td class="td-amount" style="color:var(--success)">${formatCurrency(payments.reduce((s,p)=>s+p.amount,0))}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+async function submitPayment() {
+  const errEl = document.getElementById('pay-error');
+  errEl.style.display = 'none';
+  if (!_selectedStudentId) return;
+
+  const amount = paiseToCurrency(document.getElementById('pay-amount').value);
+  const method = document.getElementById('pay-method').value;
+  const note   = document.getElementById('pay-note').value.trim();
+
+  if (amount <= 0) { errEl.textContent = 'Enter a valid amount.'; errEl.style.display = ''; return; }
+
+  try {
+    await recordPayment(_selectedStudentId, amount, method, note);
+    showToast('Payment recorded.', 'success');
+    document.getElementById('pay-amount').value = '';
+    document.getElementById('pay-note').value   = '';
+    await loadStudentFees(_selectedStudentId);
+    await loadOutstanding();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  }
+}
+
+async function updateTotalFee() {
+  if (!_selectedStudentId) return;
+  const newTotal = paiseToCurrency(document.getElementById('new-total-fee').value);
+  if (newTotal <= 0) { showToast('Invalid fee amount.', 'danger'); return; }
+  const note = document.getElementById('adjust-note').value.trim();
+  const s    = await getStudent(_selectedStudentId);
+  if (newTotal === s.totalFee) { showToast('No change in fee amount.', 'info'); return; }
+  try {
+    await recordFeeAdjustment(_selectedStudentId, s.totalFee, newTotal, note);
+    document.getElementById('adjust-note').value = '';
+    document.getElementById('adjust-details').removeAttribute('open');
+    showToast('Total fee updated.', 'success');
+    await loadStudentFees(_selectedStudentId);
+    await loadOutstanding();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+
+async function loadOutstanding() {
+  const el = document.getElementById('outstanding-list');
+  try {
+    const students = await getOutstandingBalances();
+    if (!students.length) { el.innerHTML = '<div class="empty-state"><h3>No outstanding balances — all cleared!</h3></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Student</th><th>Enrollment No</th><th>Total Fee</th><th>Paid</th><th>Balance</th><th></th></tr></thead>
+      <tbody>
+        ${students.map(s => `<tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td class="td-muted">${escapeHtml(s.enrollmentNumber)}</td>
+          <td class="td-amount">${formatCurrency(s.totalFee)}</td>
+          <td class="td-amount">${formatCurrency(s.paidFee)}</td>
+          <td class="td-amount" style="color:var(--danger);font-weight:600">${formatCurrency(s.balance)}</td>
+          <td><button class="btn btn-sm btn-outline" onclick="quickSelect('${s.id}')">Select</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+function quickSelect(id) {
+  _ts.setValue(id);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

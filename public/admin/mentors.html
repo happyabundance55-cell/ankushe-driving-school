@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instructors — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .mentor-grid-card { min-height: 300px; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html" class="active">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:1100px">
+  <div class="page-title">Instructors</div>
+
+  <div class="mentors-layout">
+
+    <!-- Left: Add form -->
+    <div class="card mentor-form-card">
+      <div class="card-title">Add Instructor</div>
+      <div class="form-group">
+        <label>Full Name *</label>
+        <input type="text" id="mentor-name" placeholder="e.g. Suresh Kumar"
+               pattern="[A-Za-z ]+" title="Alphabets and spaces only">
+      </div>
+      <div class="form-group">
+        <label>Mobile Number *</label>
+        <input type="tel" id="mentor-phone" placeholder="98765 43210"
+               maxlength="10" pattern="\d{10}" title="Enter exactly 10 digits">
+      </div>
+      <div class="form-group">
+        <label>Joining Date *</label>
+        <input type="date" id="mentor-joining">
+      </div>
+      <div id="add-error" class="alert alert-danger" style="display:none;margin-bottom:.75rem"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="addMentor()">Add Instructor</button>
+    </div>
+
+    <!-- Right: Grid -->
+    <div class="card mentor-grid-card">
+      <div class="card-title">Registered Instructors</div>
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search by name or phone…"
+               class="field-full" oninput="filterMentors()">
+      </div>
+      <div class="mentor-grid-inner">
+        <div id="mentor-list"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+initFirebase();
+let _allMentors = [];
+
+requireAuth(['admin']).then(() => {
+  document.getElementById('mentor-joining').value = todayISO();
+  loadMentors();
+});
+
+async function loadMentors() {
+  const el = document.getElementById('mentor-list');
+  try {
+    _allMentors = await getMentors();
+    renderMentors(_allMentors);
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function filterMentors() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const filtered = q
+    ? _allMentors.filter(m =>
+        m.name.toLowerCase().includes(q) || m.phone.includes(q))
+    : _allMentors;
+  renderMentors(filtered);
+}
+
+const TRASH_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+function renderMentors(mentors) {
+  const el = document.getElementById('mentor-list');
+  if (!mentors.length) {
+    el.innerHTML = '<div class="empty-state"><h3>No instructors found</h3></div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Phone</th>
+        <th>Joined</th>
+        <th>Status</th>
+        <th>Action</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${mentors.map(m => {
+        const isActive = (m.status || 'active') === 'active';
+        const ph = escapeHtml(m.phone), nm = escapeHtml(m.name);
+        return `<tr>
+          <td><strong>${nm}</strong></td>
+          <td class="td-muted">${displayPhone(m.phone)}</td>
+          <td class="td-muted">${m.joiningDate ? formatDate(m.joiningDate) : '—'}</td>
+          <td><span class="${isActive ? 'badge-active' : 'badge-inactive'}">${isActive ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            <button class="btn btn-sm ${isActive ? 'btn-outline' : 'btn-primary'}"
+              onclick="toggleStatus('${ph}','${isActive ? 'inactive' : 'active'}','${nm}')">
+              ${isActive ? 'Deactivate' : 'Activate'}
+            </button>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-danger" style="padding:.3rem .45rem" title="Remove ${nm}"
+              onclick="removeMentor('${ph}','${nm}')">
+              ${TRASH_ICON}
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+async function addMentor() {
+  const name    = document.getElementById('mentor-name').value.trim();
+  const phone   = document.getElementById('mentor-phone').value.trim();
+  const joining = document.getElementById('mentor-joining').value;
+  const errEl   = document.getElementById('add-error');
+  errEl.style.display = 'none';
+
+  if (!name)                        { errEl.textContent = 'Enter a name.';                               errEl.style.display = ''; return; }
+  if (!/^[A-Za-z ]+$/.test(name))  { errEl.textContent = 'Name must contain alphabets and spaces only.'; errEl.style.display = ''; return; }
+  if (!/^\d{10}$/.test(phone))      { errEl.textContent = 'Mobile number must be exactly 10 digits.';    errEl.style.display = ''; return; }
+  if (!joining)                     { errEl.textContent = 'Select a joining date.';                       errEl.style.display = ''; return; }
+
+  try {
+    await createMentor(name, phone, joining);
+    showToast(`${name} added as mentor.`, 'success');
+    document.getElementById('mentor-name').value  = '';
+    document.getElementById('mentor-phone').value = '';
+    document.getElementById('mentor-joining').value = todayISO();
+    loadMentors();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  }
+}
+
+async function toggleStatus(phone, newStatus, name) {
+  try {
+    await setMentorStatus(phone, newStatus);
+    showToast(`${name} marked as ${newStatus}.`, 'success');
+    loadMentors();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+
+async function removeMentor(phone, name) {
+  if (!confirm(`Remove ${name} as a mentor? They will no longer be able to log in.`)) return;
+  try {
+    await deleteMentor(phone);
+    showToast(`${name} removed.`, 'success');
+    loadMentors();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+</script>
+</body>
+</html>

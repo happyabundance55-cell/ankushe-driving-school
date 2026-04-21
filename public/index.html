@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ankushe Driving School</title>
+  <script src="shared/js/config.js"></script>
+  <script src="shared/js/auth.js"></script>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+<script>
+  const session = _getSession ? _getSession() : null;
+  if (!session) {
+    window.location.href = '/login.html';
+  } else if (session.role === 'student') {
+    window.location.href = '/student/dashboard';
+  } else if (session.role === 'mentor') {
+    window.location.href = '/admin/mark-attendance';
+  } else {
+    window.location.href = '/admin/dashboard';
+  }
+
+  function _getSession() {
+    try { return JSON.parse(sessionStorage.getItem('_session') || 'null'); } catch { return null; }
+  }
+</script>
+</body>
+</html>

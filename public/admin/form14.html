@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Form 14 — Ankushe Driving School</title>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 13px; background: #fff; color: #000; }
+
+    .print-btn {
+      position: fixed; top: 16px; right: 16px; z-index: 100;
+      padding: .6rem 1.2rem; background: #1d4ed8; color: #fff;
+      border: none; border-radius: 6px; cursor: pointer; font-size: .9rem;
+    }
+    .print-btn:hover { background: #1e40af; }
+
+    .form-wrap { max-width: 720px; margin: 0 auto; padding: 24px 32px 40px; }
+
+    .form-header { text-align: center; margin-bottom: 20px; }
+    .form-header h1 { font-size: 18px; font-weight: bold; letter-spacing: .08em; }
+    .form-header .rule { font-size: 13px; margin: 4px 0 6px; }
+    .form-header h2 { font-size: 14px; font-weight: bold; }
+
+    .top-section { display: grid; grid-template-columns: 1fr 110px; gap: 0; margin-bottom: 0; }
+    .top-fields { }
+    .photo-box {
+      width: 110px; height: 130px;
+      border: 1px solid #000;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #666; text-align: center;
+      overflow: hidden; margin-left: 8px;
+    }
+    .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+    .field-row { display: flex; border-bottom: 1px solid #aaa; padding: 5px 0; min-height: 28px; align-items: flex-start; }
+    .field-row:first-child { border-top: 1px solid #aaa; }
+    .field-label { min-width: 290px; padding-right: 8px; color: #222; }
+    .field-value { flex: 1; font-weight: normal; }
+    .field-row.indent { padding-left: 16px; }
+
+    .section-label { padding: 5px 0; border-bottom: 1px solid #aaa; font-weight: normal; }
+
+    .training-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .training-table th, .training-table td {
+      border: 1px solid #000; padding: 5px 8px; text-align: center; font-size: 12px;
+    }
+    .training-table th { font-weight: bold; background: #f5f5f5; }
+    .training-table .course-col { text-align: left; }
+
+    .footer-row { display: flex; justify-content: space-between; margin-top: 40px; font-size: 13px; }
+    .loading-msg { text-align: center; padding: 60px; font-size: 1rem; color: #555; }
+
+    @media print {
+      .print-btn { display: none; }
+      .form-wrap { padding: 8px 16px 24px; }
+      body { font-size: 12px; }
+    }
+    @page { size: A4; margin: 15mm; }
+  </style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨 Print Form 14</button>
+
+<div class="form-wrap" id="form-wrap">
+  <div class="loading-msg">Loading…</div>
+</div>
+
+<script>
+const studentId = getQueryParam('id');
+if (!studentId) { document.getElementById('form-wrap').innerHTML = '<div style="padding:2rem;color:red">No student ID provided.</div>'; }
+
+const RELATION_FULL = { son: 'Son of', wife: 'Wife of', daughter: 'Daughter of', co: 'C/o' };
+
+function fmtD(val) {
+  if (!val) return '—';
+  const d = val && val.toDate ? val.toDate() : new Date(val);
+  if (isNaN(d)) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}-${mm}-${d.getFullYear()}`;
+}
+
+(async function() {
+  initFirebase();
+  const [student, attendance] = await Promise.all([
+    getStudent(studentId),
+    getStudentAttendance(studentId)
+  ]);
+  if (!student) {
+    document.getElementById('form-wrap').innerHTML = '<div style="padding:2rem;color:red">Student not found.</div>';
+    return;
+  }
+  renderForm14(student, attendance);
+})();
+
+function renderForm14(s, attendance) {
+  const enrollYear = s.enrollmentDate
+    ? (s.enrollmentDate.toDate ? s.enrollmentDate.toDate() : new Date(s.enrollmentDate)).getFullYear()
+    : new Date().getFullYear();
+
+  const permAddr = [s.addressFlat, s.addressLine2, s.addressArea, s.addressDistrictState, s.pincode].filter(Boolean).join(', ') || s.address || '—';
+
+  const tempAddr = s.tempAddressSame !== false
+    ? ''
+    : [s.tempAddressFlat, s.tempAddressLine2, s.tempAddressArea, s.tempAddressDistrictState, s.tempAddressPincode].filter(Boolean).join(', ');
+
+  const relationFull = RELATION_FULL[s.relation] || 'Son/Wife/Daughter of';
+
+  // Training period from attendance
+  const sortedAtt = [...attendance].sort((a, b) => {
+    const toMs = d => d?.toMillis ? d.toMillis() : new Date(d || 0).getTime();
+    return toMs(a.date) - toMs(b.date);
+  });
+  const fromDate = sortedAtt.length ? fmtD(sortedAtt[0].date) : '—';
+  const toDate   = sortedAtt.length ? fmtD(sortedAtt[sortedAtt.length - 1].date) : '—';
+
+  document.getElementById('form-wrap').innerHTML = `
+    <div class="form-header">
+      <h1>FORM 14</h1>
+      <div class="rule">[See rule 27(a)]</div>
+      <h2>REGISTER SHOWING THE ENROLLMENT OF TRAINEE(S)<br>IN THE DRIVING SCHOOL ESTABLISHMENTS</h2>
+    </div>
+
+    <div class="top-section">
+      <div class="top-fields">
+        <div class="field-row">
+          <span class="field-label">Register for the year</span>
+          <span class="field-value">${enrollYear}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">1.&nbsp; Enrollment number</span>
+          <span class="field-value">${escapeHtml(s.enrollmentNumber)}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">2.&nbsp; Name of the trainee with photograph</span>
+          <span class="field-value" style="text-transform:uppercase;font-weight:bold">${escapeHtml(s.name)}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">3.&nbsp; ${escapeHtml(relationFull)}</span>
+          <span class="field-value" style="text-transform:uppercase">${escapeHtml(s.guardianName || '—')}</span>
+        </div>
+      </div>
+      <div class="photo-box">
+        ${s.photoURL
+          ? `<img src="${escapeHtml(s.photoURL)}" alt="Photo">`
+          : `<span>Photo</span>`}
+      </div>
+    </div>
+
+    <div class="section-label">4.&nbsp; Address</div>
+    <div class="field-row indent">
+      <span class="field-label">(a) Permanent Address</span>
+      <span class="field-value" style="text-transform:uppercase">${escapeHtml(permAddr)}</span>
+    </div>
+    <div class="field-row indent">
+      <span class="field-label">(b) Temporary Address / official address (if any)</span>
+      <span class="field-value" style="text-transform:uppercase">${tempAddr ? escapeHtml(tempAddr) : '—'}</span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">5.&nbsp; Date of birth</span>
+      <span class="field-value">${fmtD(s.dob)}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">6.&nbsp; Date of enrollment</span>
+      <span class="field-value">${fmtD(s.enrollmentDate)}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">7.&nbsp; Learner's licence number and date of it's expiry</span>
+      <span class="field-value">
+        ${s.learnerLicenceNo ? escapeHtml(s.learnerLicenceNo) : '—'}
+        ${s.learnerLicenceExpiry ? `&nbsp;&nbsp;${fmtD(s.learnerLicenceExpiry)}` : ''}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">8.&nbsp; Date of passing the test of competence to drive</span>
+      <span class="field-value">${fmtD(s.testPassDate)}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">9.&nbsp; Driving licence number and date of issue and the licence authority which issued the licence</span>
+      <span class="field-value">
+        ${s.dlNumber ? escapeHtml(s.dlNumber) : '—'}
+        ${s.dlIssueDate ? `&nbsp;&nbsp;${fmtD(s.dlIssueDate)}` : ''}
+        ${s.dlAuthority ? `<br>${escapeHtml(s.dlAuthority)}` : ''}
+      </span>
+    </div>
+
+    <table class="training-table" style="margin-top:20px">
+      <thead>
+        <tr>
+          <th rowspan="2" class="course-col" style="width:40%">Course of Training in Driving</th>
+          <th colspan="2">Period</th>
+          <th rowspan="2">Remarks</th>
+        </tr>
+        <tr>
+          <th>From</th>
+          <th>To</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="course-col">${s.vehicleClass ? escapeHtml(s.vehicleClass) : '—'}</td>
+          <td>${fromDate}</td>
+          <td>${toDate}</td>
+          <td>--------</td>
+        </tr>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+
+    <div class="footer-row">
+      <div>13.&nbsp; Signature of the licence holder / Instructor</div>
+      <div style="font-weight:bold">${escapeHtml(APP_NAME.toUpperCase())}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

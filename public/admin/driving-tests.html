@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driving Tests — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <style>
+    /* ── Tom Select base overrides ─────────────────────────────── */
+    .ts-wrapper.single .ts-control {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: .9rem;
+      font-family: inherit;
+      padding: .58rem .85rem;
+      background: var(--white);
+      color: var(--text);
+      box-shadow: none;
+      cursor: pointer;
+    }
+    .ts-wrapper.single.focus .ts-control {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .ts-wrapper.single.input-active .ts-control {
+      border-color: var(--primary);
+    }
+    .ts-dropdown {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      font-size: .9rem;
+      font-family: inherit;
+      background: var(--white);
+      color: var(--text);
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .ts-dropdown .ts-dropdown-content { max-height: 240px; }
+    .ts-dropdown .option {
+      padding: .6rem 1rem;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .ts-dropdown .option:hover,
+    .ts-dropdown .option.active  { background: var(--bg-hover); color: var(--text); }
+    .ts-dropdown .option.selected { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+    .ts-dropdown input.ts-search {
+      border: none;
+      border-bottom: 1.5px solid var(--border);
+      border-radius: 0;
+      padding: .55rem 1rem;
+      font-size: .875rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      width: 100%;
+      outline: none;
+    }
+    .ts-dropdown input.ts-search:focus { background: var(--bg); }
+    .ts-dropdown .no-results { padding: .75rem 1rem; color: var(--text-muted); font-size: .875rem; }
+    .ts-wrapper .clear-button { color: var(--text-muted); }
+
+    /* ── Modal ──────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      width: 100%;
+      max-width: 480px;
+      padding: 1.75rem;
+      position: relative;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      line-height: 1;
+      padding: .2rem .4rem;
+    }
+    .modal-close:hover { color: var(--text); }
+    .test-past td { opacity: .55; }
+
+    /* ── Status pills ────────────────────────────────────────────── */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .38rem;
+      padding: .28rem .75rem;
+      border-radius: var(--radius-pill);
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-pill::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-scheduled {
+      background: #fff8ec;
+      color: #92400e;
+      border: 1.5px solid #fde68a;
+    }
+    .status-scheduled::before { background: #f59e0b; box-shadow: 0 0 0 2px #fde68a; }
+
+    .status-completed {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1.5px solid #6ee7b7;
+    }
+    .status-completed::before { background: #10b981; }
+
+    .status-cancelled {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1.5px solid #fca5a5;
+    }
+    .status-cancelled::before { background: #ef4444; }
+
+    .status-overdue {
+      background: #fff1f2;
+      color: #9f1239;
+      border: 1.5px solid #fda4af;
+    }
+    .status-overdue::before { background: #f43f5e; animation: pulse-dot 1.4s infinite; }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .3; }
+    }
+
+    /* Wider dropdown inside modal */
+    #modal-overlay .ts-dropdown { z-index: 600; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html" class="active">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+  <div class="page-title">
+    Driving Tests
+    <button class="btn btn-primary" onclick="openModal()">+ Schedule Test</button>
+  </div>
+
+  <div class="filters" style="align-items:flex-end">
+    <div class="filter-group" style="flex:1;min-width:220px">
+      <label>Student</label>
+      <select id="filter-student">
+        <option value="">All Students</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Status</label>
+      <select id="status-filter" onchange="applyFilter()">
+        <option value="all">All</option>
+        <option value="scheduled" selected>Scheduled</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="test-count" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Enrollment No</th>
+          <th>Scheduled Date &amp; Time</th>
+          <th>Venue</th>
+          <th>Notes</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tests-body">
+        <tr><td colspan="7"><div class="loading"><div class="spinner"></div> Loading…</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Schedule / Edit Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-heading">Schedule Driving Test</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Student *</label>
+      <select id="m-student">
+        <option value="">— Search student —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Date &amp; Time *</label>
+      <input type="datetime-local" id="m-datetime" style="max-width:100%;width:100%">
+    </div>
+
+    <div class="form-group">
+      <label>Venue</label>
+      <input type="text" id="m-venue" placeholder="e.g. RTO Office, Hubli" style="max-width:100%;width:100%">
+    </div>
+
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="m-notes" rows="2" placeholder="Any special instructions…" style="max-width:100%;width:100%"></textarea>
+    </div>
+
+    <div class="form-group" id="m-status-group" style="display:none">
+      <label>Status</label>
+      <select id="m-status">
+        <option value="scheduled">Scheduled</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div id="m-error" class="alert alert-danger" style="display:none;margin-bottom:.75rem"></div>
+
+    <div style="display:flex;gap:.75rem">
+      <button class="btn btn-primary" style="flex:1" onclick="saveTest()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _allTests  = [];
+let _students  = [];
+let _editingId = null;
+let tsFilter   = null;
+let tsStudent  = null;
+
+requireAuth(['admin']).then(async () => {
+  _students = await getStudents({ status: 'all' });
+  _initTomSelects();
+  await _loadTests();
+
+  const preStudentId = getQueryParam('student');
+  if (preStudentId) {
+    openModal();
+    tsStudent.setValue(preStudentId);
+  }
+});
+
+function _initTomSelects() {
+  const filterOpts = _students.map(s => ({
+    value: s.id,
+    text:  `${s.name} (${s.enrollmentNumber})`
+  }));
+
+  tsFilter = new TomSelect('#filter-student', {
+    options:     filterOpts,
+    placeholder: 'All Students',
+    allowEmptyOption: true,
+    maxOptions:  500,
+    onChange:    () => applyFilter(),
+    render: {
+      option: (data, escape) => `<div>${escape(data.text)}</div>`,
+      item:   (data, escape) => `<div>${escape(data.text)}</div>`
+    }
+  });
+
+  const modalOpts = _students.map(s => ({
+    value: s.id,
+    text:  `${s.name} (${s.enrollmentNumber})`
+  }));
+
+  tsStudent = new TomSelect('#m-student', {
+    options:     modalOpts,
+    placeholder: '— Search student —',
+    allowEmptyOption: true,
+    maxOptions:  500,
+    render: {
+      option: (data, escape) => `<div style="padding:.1rem 0"><strong>${escape(data.text.split(' (')[0])}</strong><span style="color:var(--text-muted);font-size:.82rem;margin-left:.4rem">${escape('(' + data.text.split('(')[1])}</span></div>`,
+      item:   (data, escape) => `<div>${escape(data.text)}</div>`
+    }
+  });
+}
+
+async function _loadTests() {
+  _allTests = await getAllDrivingTests();
+  applyFilter();
+}
+
+function applyFilter() {
+  const studentId = tsFilter ? tsFilter.getValue() : '';
+  const status    = document.getElementById('status-filter').value;
+
+  let list = _allTests;
+  if (status !== 'all')  list = list.filter(t => t.status === status);
+  if (studentId)         list = list.filter(t => t.studentId === studentId);
+
+  renderTable(list);
+}
+
+function renderTable(tests) {
+  const body = document.getElementById('tests-body');
+  document.getElementById('test-count').textContent =
+    `${tests.length} test${tests.length !== 1 ? 's' : ''}`;
+
+  if (!tests.length) {
+    body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><h3>No tests found</h3></div></td></tr>';
+    return;
+  }
+
+  const now = Date.now();
+  body.innerHTML = tests.map(t => {
+    const ts      = t.scheduledAt ? t.scheduledAt.toMillis() : 0;
+    const isOverdue = ts < now && t.status === 'scheduled';
+    const dtStr   = t.scheduledAt ? _fmtDateTime(t.scheduledAt.toDate()) : '—';
+
+    const statusPill = isOverdue
+      ? `<span class="status-pill status-overdue">Overdue</span>`
+      : {
+          scheduled: `<span class="status-pill status-scheduled">Scheduled</span>`,
+          completed: `<span class="status-pill status-completed">Completed</span>`,
+          cancelled: `<span class="status-pill status-cancelled">Cancelled</span>`
+        }[t.status] || `<span class="status-pill status-cancelled">${escapeHtml(t.status)}</span>`;
+
+    return `<tr class="${isOverdue ? 'test-past' : ''}">
+      <td><strong>${escapeHtml(t.studentName)}</strong></td>
+      <td class="td-muted">${escapeHtml(t.enrollmentNumber || '—')}</td>
+      <td style="${isOverdue ? 'color:var(--danger);font-weight:600' : ''}">${dtStr}</td>
+      <td class="td-muted">${escapeHtml(t.venue || '—')}</td>
+      <td class="td-muted" style="max-width:160px;white-space:normal;font-size:.85rem">${escapeHtml(t.notes || '—')}</td>
+      <td>${statusPill}</td>
+      <td>
+        <div style="display:flex;gap:.35rem">
+          <button class="btn btn-sm btn-outline" onclick="editTest('${t.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger"  onclick="cancelTest('${t.id}')">Cancel</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function _fmtDateTime(d) {
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function _localDateTimeValue(ts) {
+  const d = ts.toDate();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openModal() {
+  _editingId = null;
+  document.getElementById('modal-heading').textContent = 'Schedule Driving Test';
+  tsStudent.clear();
+  tsStudent.enable();
+  document.getElementById('m-datetime').value  = '';
+  document.getElementById('m-venue').value     = '';
+  document.getElementById('m-notes').value     = '';
+  document.getElementById('m-status').value    = 'scheduled';
+  document.getElementById('m-status-group').style.display = 'none';
+  document.getElementById('m-error').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function editTest(id) {
+  const t = _allTests.find(x => x.id === id);
+  if (!t) return;
+  _editingId = id;
+  document.getElementById('modal-heading').textContent = 'Edit Driving Test';
+  tsStudent.setValue(t.studentId);
+  tsStudent.disable();
+  document.getElementById('m-datetime').value  = t.scheduledAt ? _localDateTimeValue(t.scheduledAt) : '';
+  document.getElementById('m-venue').value     = t.venue || '';
+  document.getElementById('m-notes').value     = t.notes || '';
+  document.getElementById('m-status').value    = t.status || 'scheduled';
+  document.getElementById('m-status-group').style.display = '';
+  document.getElementById('m-error').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  _editingId = null;
+}
+
+async function saveTest() {
+  const errEl      = document.getElementById('m-error');
+  errEl.style.display = 'none';
+  const studentId  = tsStudent.getValue();
+  const datetimeVal = document.getElementById('m-datetime').value;
+  const venue      = document.getElementById('m-venue').value.trim();
+  const notes      = document.getElementById('m-notes').value.trim();
+  const status     = document.getElementById('m-status').value;
+
+  if (!studentId)   { errEl.textContent = 'Select a student.';      errEl.style.display = ''; return; }
+  if (!datetimeVal) { errEl.textContent = 'Select a date and time.'; errEl.style.display = ''; return; }
+
+  const btn = document.querySelector('#modal-overlay .btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    if (_editingId) {
+      await updateDrivingTest(_editingId, { scheduledAt: datetimeVal, venue, notes, status });
+      showToast('Test updated.', 'success');
+    } else {
+      await scheduleDrivingTest(studentId, { scheduledAt: datetimeVal, venue, notes });
+      showToast('Test scheduled.', 'success');
+    }
+    closeModal();
+    await _loadTests();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+async function cancelTest(id) {
+  if (!confirm('Mark this test as cancelled?')) return;
+  try {
+    await updateDrivingTest(id, { status: 'cancelled' });
+    showToast('Test cancelled.', 'success');
+    await _loadTests();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+</script>
+</body>
+</html>

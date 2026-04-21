@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your Profile — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .info-row { display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;border-bottom:1px solid var(--border);font-size:.9rem;gap:.75rem; }
+    .info-row:last-child { border-bottom:none; }
+    .info-label { color:var(--text-muted);flex-shrink:0; }
+    .info-value { font-weight:500;text-align:right; }
+    .photo-upload-wrap { display:flex;align-items:center;gap:1rem;margin-bottom:1rem; }
+    .photo-preview { width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0;overflow:hidden; }
+    .photo-preview img { width:100%;height:100%;object-fit:cover; }
+    .photo-upload-btn { position:relative;overflow:hidden;display:inline-block; }
+    .photo-upload-btn input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html" class="active">Your Profile</a></li>
+    <li><a href="sign.html">Sign Attendance</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:680px">
+  <div id="root"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+</div>
+
+<script>
+requireAuth(['student']).then(async ({ profile }) => {
+  const studentId = profile.studentId;
+  if (!studentId) {
+    document.getElementById('root').innerHTML = '<div class="alert alert-danger">Student record not linked. Contact the admin.</div>';
+    return;
+  }
+
+  const [student, payments, attendance] = await Promise.all([
+    getStudent(studentId).catch(() => null),
+    getStudentPayments(studentId).catch(() => []),
+    getStudentAttendance(studentId).catch(() => [])
+  ]);
+
+  if (!student) {
+    document.getElementById('root').innerHTML = '<div class="alert alert-danger">Student record not found.</div>';
+    return;
+  }
+
+  function fmtDob(ts) {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toISOString().split('T')[0];
+  }
+
+  function toDateVal(ts) {
+    if (!ts) return '';
+    try { return (ts.toDate ? ts.toDate() : new Date(ts)).toISOString().split('T')[0]; } catch { return ''; }
+  }
+
+  const isNew = !student.name;
+  const heading = isNew ? 'Welcome! Complete your profile' : `Hello, ${escapeHtml(student.name.split(' ')[0])} 👋`;
+
+  // ── Read-only profile view (existing students) ──────────────────────────────
+  function renderReadOnlyProfile() {
+    const RELATION = { son:'Son of', wife:'Wife of', daughter:'Daughter of', co:'C/o' };
+    const guardianLabel = student.relation ? (RELATION[student.relation] || '') : '';
+    const guardianDisplay = guardianLabel && student.guardianName
+      ? `${guardianLabel}: ${escapeHtml(student.guardianName)}`
+      : escapeHtml(student.guardianName || '—');
+
+    const permAddr = [student.addressFlat, student.addressLine2, student.addressArea, student.addressDistrictState, student.addressPincode].filter(Boolean).join(', ') || student.address || '—';
+    const tempAddr = student.tempAddressSame !== false
+      ? 'Same as permanent'
+      : [student.tempAddressFlat, student.tempAddressLine2, student.tempAddressArea, student.tempAddressDistrictState, student.tempAddressPincode].filter(Boolean).join(', ') || '—';
+    const fmtDate = ts => { if (!ts) return '—'; const d = ts.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
+
+    return `
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Personal Details<span style="font-size:.78rem;font-weight:400;color:var(--text-muted)">Contact admin to update</span></div>
+      <div class="photo-upload-wrap">
+        <div class="photo-preview" id="ro-photo-wrap">
+          ${student.photoURL ? `<img src="${escapeHtml(student.photoURL)}" id="ro-photo-img">` : `<span>👤</span>`}
+        </div>
+        <div>
+          <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.4rem">Profile Photo</div>
+          <div class="photo-upload-btn">
+            <button class="btn btn-outline btn-sm" type="button">Change Photo</button>
+            <input type="file" accept="image/*" onchange="handlePhotoUpload(this)">
+          </div>
+          <div id="photo-status" style="font-size:.78rem;margin-top:.3rem"></div>
+        </div>
+      </div>
+      <div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${escapeHtml(student.name)}</span></div>
+      <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${displayPhone(profile.phone)}</span></div>
+      ${student.dob ? `<div class="info-row"><span class="info-label">Date of Birth</span><span class="info-value">${fmtDate(student.dob)}</span></div>` : ''}
+      ${student.guardianName ? `<div class="info-row"><span class="info-label">Guardian</span><span class="info-value">${guardianDisplay}</span></div>` : ''}
+      ${student.guardianPhone ? `<div class="info-row"><span class="info-label">Guardian Phone</span><span class="info-value">${escapeHtml(student.guardianPhone)}</span></div>` : ''}
+      <div class="info-row"><span class="info-label">Permanent Address</span><span class="info-value" style="text-align:right;max-width:60%">${escapeHtml(permAddr)}</span></div>
+      <div class="info-row"><span class="info-label">Temporary Address</span><span class="info-value" style="text-align:right;max-width:60%">${escapeHtml(tempAddr)}</span></div>
+    </div>`;
+  }
+
+  // ── Vehicle & Licence block (read-only, shown only if admin has filled anything)
+  const hasVehicle = student.vehicleClass || student.vehicleRegNo;
+  const hasLicence = student.learnerLicenceNo || student.dlNumber || student.testPassDate;
+
+  const vehicleHtml = (hasVehicle || hasLicence) ? `
+  <div class="card">
+    <div class="card-title">Vehicle &amp; Licence</div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">Filled by admin. Contact admin to update.</p>
+    ${hasVehicle ? `
+      ${student.vehicleClass ? `<div class="info-row"><span class="info-label">Class of Vehicle</span><span class="info-value">${escapeHtml(student.vehicleClass)}</span></div>` : ''}
+      ${student.vehicleRegNo ? `<div class="info-row"><span class="info-label">Vehicle Trained On</span><span class="info-value">${escapeHtml(student.vehicleRegNo)}</span></div>` : ''}
+    ` : ''}
+    ${hasLicence ? `
+      ${student.learnerLicenceNo ? `<div class="info-row"><span class="info-label">Learner's Licence</span><span class="info-value">${escapeHtml(student.learnerLicenceNo)}${student.learnerLicenceExpiry ? ' · Expiry: ' + formatDate(student.learnerLicenceExpiry) : ''}</span></div>` : ''}
+      ${student.testPassDate ? `<div class="info-row"><span class="info-label">Test Passed On</span><span class="info-value">${formatDate(student.testPassDate)}</span></div>` : ''}
+      ${student.dlNumber ? `<div class="info-row"><span class="info-label">Driving Licence</span><span class="info-value">${escapeHtml(student.dlNumber)}</span></div>` : ''}
+      ${student.dlIssueDate ? `<div class="info-row"><span class="info-label">DL Issue Date</span><span class="info-value">${formatDate(student.dlIssueDate)}</span></div>` : ''}
+      ${student.dlAuthority ? `<div class="info-row"><span class="info-label">Issuing Authority</span><span class="info-value">${escapeHtml(student.dlAuthority)}</span></div>` : ''}
+    ` : ''}
+  </div>` : '';
+
+  // ── Temp address fields visibility helper
+  const tempSame = student.tempAddressSame !== false;
+
+  document.getElementById('root').innerHTML = `
+    <div class="page-title">${heading}</div>
+
+    ${isNew ? '<div class="alert alert-info" style="margin-bottom:1rem">Fill in your details below and tap Save.</div>' : ''}
+
+    ${!isNew ? renderReadOnlyProfile() : `<form id="profile-form" onsubmit="saveProfile(event)">
+
+      <!-- Block 1: Personal Details -->
+      <div class="card">
+        <div class="card-title">Personal Details</div>
+        <div class="photo-upload-wrap">
+          <div class="photo-preview" id="form-photo-wrap">
+            ${student.photoURL ? `<img src="${escapeHtml(student.photoURL)}" id="form-photo-img">` : `<span id="form-photo-placeholder">👤</span>`}
+          </div>
+          <div>
+            <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.4rem">Profile Photo</div>
+            <div class="photo-upload-btn">
+              <button class="btn btn-outline btn-sm" type="button">Upload Photo</button>
+              <input type="file" accept="image/*" onchange="handlePhotoUpload(this)">
+            </div>
+            <div id="photo-status" style="font-size:.78rem;margin-top:.3rem"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" id="pf-name" required placeholder="e.g. Rajesh Kumar" value="${escapeHtml(student.name || '')}">
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="tel" value="${displayPhone(profile.phone)}" disabled style="background:var(--bg);color:var(--text-muted);cursor:not-allowed">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Date of Birth *</label>
+          <input type="date" id="pf-dob" required value="${toDateVal(student.dob)}" oninput="limitDobYear(this)">
+        </div>
+        <div class="form-group">
+          <label>Guardian / Parent Name *</label>
+          <input type="text" id="pf-guardian-name" required placeholder="Father / Spouse / Guardian name" value="${escapeHtml(student.guardianName || '')}">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Relation</label>
+            <select id="pf-relation">
+              <option value="">— Select —</option>
+              <option value="son" ${student.relation==='son'?'selected':''}>Son of</option>
+              <option value="wife" ${student.relation==='wife'?'selected':''}>Wife of</option>
+              <option value="daughter" ${student.relation==='daughter'?'selected':''}>Daughter of</option>
+              <option value="co" ${student.relation==='co'?'selected':''}>C/o</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Guardian / Parent Phone *</label>
+            <input type="tel" id="pf-guardian-phone" required placeholder="98765 43210" maxlength="10" pattern="\\d{10}" value="${student.guardianPhone ? student.guardianPhone.replace('+91','') : ''}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Block 2: Permanent Address -->
+      <div class="card">
+        <div class="card-title">Permanent Address *</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Flat / House Number *</label>
+            <input type="text" id="address-flat" required placeholder="e.g. Flat 4B, Sunrise Apts">
+          </div>
+          <div class="form-group">
+            <label>Address Line 2</label>
+            <input type="text" id="address-line2" placeholder="Street, landmark, colony…">
+          </div>
+        </div>
+        <div class="form-group" style="max-width:220px">
+          <label>Pincode *</label>
+          <div style="display:flex;gap:.5rem;align-items:flex-start">
+            <input type="text" id="pincode" placeholder="560001" maxlength="6" pattern="\\d{6}" title="6-digit pincode" oninput="onPincodeInput('perm')" required style="flex:1">
+            <div id="pincode-spinner" style="display:none;align-self:center"><div class="spinner" style="width:18px;height:18px"></div></div>
+          </div>
+          <div id="pincode-msg" style="font-size:.8rem;margin-top:.25rem"></div>
+        </div>
+        <div class="form-row" id="area-row" style="display:none">
+          <div class="form-group">
+            <label>Area / Locality</label>
+            <input type="text" id="address-area" readonly style="background:var(--bg);cursor:default">
+          </div>
+          <div class="form-group">
+            <label>District &amp; State</label>
+            <input type="text" id="address-district-state" readonly style="background:var(--bg);cursor:default">
+          </div>
+        </div>
+      </div>
+
+      <!-- Block 3: Temporary Address -->
+      <div class="card">
+        <div class="card-title">Temporary / Official Address</div>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:1rem">
+          <input type="checkbox" id="temp-same" checked onchange="toggleTempAddress()">
+          <span style="font-size:.9rem">Same as permanent address</span>
+        </label>
+        <div id="temp-address-fields" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Flat / House Number</label>
+              <input type="text" id="temp-address-flat" placeholder="e.g. Flat 4B, Sunrise Apts">
+            </div>
+            <div class="form-group">
+              <label>Address Line 2</label>
+              <input type="text" id="temp-address-line2" placeholder="Street, landmark, colony…">
+            </div>
+          </div>
+          <div class="form-group" style="max-width:220px">
+            <label>Pincode</label>
+            <div style="display:flex;gap:.5rem;align-items:flex-start">
+              <input type="text" id="temp-pincode" placeholder="560001" maxlength="6" pattern="\\d{6}" title="6-digit pincode" oninput="onPincodeInput('temp')" style="flex:1">
+              <div id="temp-pincode-spinner" style="display:none;align-self:center"><div class="spinner" style="width:18px;height:18px"></div></div>
+            </div>
+            <div id="temp-pincode-msg" style="font-size:.8rem;margin-top:.25rem"></div>
+          </div>
+          <div class="form-row" id="temp-area-row" style="display:none">
+            <div class="form-group">
+              <label>Area / Locality</label>
+              <input type="text" id="temp-address-area" readonly style="background:var(--bg);cursor:default">
+            </div>
+            <div class="form-group">
+              <label>District &amp; State</label>
+              <input type="text" id="temp-address-district-state" readonly style="background:var(--bg);cursor:default">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pf-error" class="alert alert-danger" style="display:none;margin-bottom:1rem"></div>
+      <div id="pf-success" class="alert alert-success" style="display:none;margin-bottom:1rem">Profile saved!</div>
+      <button type="submit" class="btn btn-primary" id="pf-save-btn" style="margin-bottom:1.5rem;min-width:160px">Save Profile</button>
+    </form>`}
+
+    <!-- Fee Summary (read-only) -->
+    <div class="card">
+      <div class="card-title">Fee Summary</div>
+      <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">Managed by admin.</p>
+      <div class="stat-grid" style="margin:0">
+        <div class="stat-card primary">
+          <div class="stat-label">Course Fee</div>
+          <div class="stat-value">${formatCurrency(student.totalFee)}</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">Amount Paid</div>
+          <div class="stat-value">${formatCurrency(student.paidFee)}</div>
+        </div>
+        <div class="stat-card ${student.balance > 0 ? 'danger' : 'success'}">
+          <div class="stat-label">Balance Due</div>
+          <div class="stat-value" style="color:${student.balance > 0 ? 'var(--danger)' : 'var(--success)'}">${formatCurrency(student.balance)}</div>
+        </div>
+        <div class="stat-card primary">
+          <div class="stat-label">Lessons</div>
+          <div class="stat-value">${attendance.length}</div>
+          <div class="stat-sub">${attendance.length ? 'Last: ' + formatDate(attendance[0].date) : 'No sessions yet'}</div>
+        </div>
+      </div>
+      ${payments.length ? `
+      <div style="margin-top:1rem">
+        <div style="font-weight:600;font-size:.875rem;margin-bottom:.5rem">Payment History</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Amount</th><th>Method</th></tr></thead>
+            <tbody>${payments.map(p => `<tr>
+              <td>${formatDate(p.date)}</td>
+              <td style="color:var(--success);font-weight:600">${formatCurrency(p.amount)}</td>
+              <td>${escapeHtml(p.method)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>` : ''}
+    </div>
+
+    ${vehicleHtml}
+
+    ${attendance.length ? `
+    <div class="card">
+      <div class="card-title">Recent Sessions</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date &amp; Time</th><th>Instructor</th></tr></thead>
+          <tbody>${attendance.slice(0,10).map(a => `<tr>
+            <td>${formatDateTime(a.date)}</td>
+            <td>${escapeHtml(a.mentorName || '—')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+
+  // ── Populate address fields (values can't go in readonly inputs via innerHTML) ──
+  document.getElementById('address-flat').value          = student.addressFlat || student.address || '';
+  document.getElementById('address-line2').value         = student.addressLine2 || '';
+  document.getElementById('pincode').value               = student.addressPincode || '';
+  if (student.addressArea || student.addressDistrictState) {
+    document.getElementById('address-area').value        = student.addressArea || '';
+    document.getElementById('address-district-state').value = student.addressDistrictState || '';
+    document.getElementById('area-row').style.display    = '';
+  }
+  const tempSameChecked = student.tempAddressSame !== false;
+  document.getElementById('temp-same').checked           = tempSameChecked;
+  document.getElementById('temp-address-fields').style.display = tempSameChecked ? 'none' : '';
+  document.getElementById('temp-address-flat').value     = student.tempAddressFlat || '';
+  document.getElementById('temp-address-line2').value    = student.tempAddressLine2 || '';
+  document.getElementById('temp-pincode').value          = student.tempAddressPincode || '';
+  if (student.tempAddressArea || student.tempAddressDistrictState) {
+    document.getElementById('temp-address-area').value   = student.tempAddressArea || '';
+    document.getElementById('temp-address-district-state').value = student.tempAddressDistrictState || '';
+    document.getElementById('temp-area-row').style.display = '';
+  }
+
+  window.toggleTempAddress = function() {
+    const same = document.getElementById('temp-same').checked;
+    document.getElementById('temp-address-fields').style.display = same ? 'none' : '';
+  };
+
+  let _pincodeTimer = null, _tempPincodeTimer = null;
+  window.onPincodeInput = function(type) {
+    const idPrefix = type === 'temp' ? 'temp-' : '';
+    const val = document.getElementById(idPrefix + 'pincode').value.trim();
+    if (type === 'temp') {
+      clearTimeout(_tempPincodeTimer);
+      if (val.length === 6 && /^\d{6}$/.test(val)) _tempPincodeTimer = setTimeout(() => fetchArea(val, 'temp'), 400);
+    } else {
+      clearTimeout(_pincodeTimer);
+      if (val.length === 6 && /^\d{6}$/.test(val)) _pincodeTimer = setTimeout(() => fetchArea(val, 'perm'), 400);
+      else document.getElementById('pincode-msg').textContent = '';
+    }
+  };
+
+  async function fetchArea(pin, type) {
+    const isPerm     = type === 'perm';
+    const spinnerId  = isPerm ? 'pincode-spinner'       : 'temp-pincode-spinner';
+    const msgId      = isPerm ? 'pincode-msg'           : 'temp-pincode-msg';
+    const areaId     = isPerm ? 'address-area'          : 'temp-address-area';
+    const dsId       = isPerm ? 'address-district-state': 'temp-address-district-state';
+    const rowId      = isPerm ? 'area-row'              : 'temp-area-row';
+    document.getElementById(spinnerId).style.display = '';
+    document.getElementById(msgId).textContent = '';
+    try {
+      const res  = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const data = await res.json();
+      if (data[0].Status === 'Success' && data[0].PostOffice?.length) {
+        const po = data[0].PostOffice[0];
+        const locality  = [po.Name, po.Block !== 'NA' ? po.Block : ''].filter(Boolean).join(', ');
+        const distState = [po.District, po.State].filter(Boolean).join(', ');
+        document.getElementById(areaId).value = locality;
+        document.getElementById(dsId).value   = distState;
+        document.getElementById(rowId).style.display = '';
+        document.getElementById(msgId).style.color   = 'var(--success)';
+        document.getElementById(msgId).textContent   = '✓ Area fetched';
+      } else {
+        document.getElementById(msgId).style.color   = 'var(--danger)';
+        document.getElementById(msgId).textContent   = 'Pincode not found';
+      }
+    } catch {
+      document.getElementById(msgId).style.color   = 'var(--danger)';
+      document.getElementById(msgId).textContent   = 'Could not fetch — check connection';
+    } finally {
+      document.getElementById(spinnerId).style.display = 'none';
+    }
+  }
+
+  window.handlePhotoUpload = async function(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('photo-status');
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.textContent = 'Uploading…';
+    try {
+      const dataURL = await compressImage(file, 300, 300, 0.78);
+      await updateStudentPhoto(studentId, dataURL);
+      // Update preview
+      ['ro-photo-wrap','form-photo-wrap'].forEach(id => {
+        const wrap = document.getElementById(id);
+        if (!wrap) return;
+        wrap.innerHTML = `<img src="${dataURL}" style="width:100%;height:100%;object-fit:cover">`;
+      });
+      statusEl.style.color = 'var(--success)';
+      statusEl.textContent = 'Photo saved!';
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    } catch(err) {
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = err.message || 'Upload failed.';
+    }
+    input.value = '';
+  };
+
+  function compressImage(file, maxW, maxH, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read file.'));
+      reader.onload = e => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Invalid image.'));
+        img.onload = () => {
+          const scale = Math.min(1, maxW / img.width, maxH / img.height);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  window.saveProfile = async function(e) {
+    e.preventDefault();
+    document.getElementById('pf-error').style.display = 'none';
+    document.getElementById('pf-success').style.display = 'none';
+
+    const name         = document.getElementById('pf-name').value.trim();
+    const dob          = document.getElementById('pf-dob').value;
+    const guardianName = document.getElementById('pf-guardian-name').value.trim();
+    const guardianRaw  = document.getElementById('pf-guardian-phone').value.trim();
+    if (!name || !dob || !guardianName || !guardianRaw) {
+      document.getElementById('pf-error').textContent = 'Please fill in all required fields.';
+      document.getElementById('pf-error').style.display = '';
+      return;
+    }
+    if (!/^\d{10}$/.test(guardianRaw)) {
+      document.getElementById('pf-error').textContent = 'Guardian phone must be 10 digits.';
+      document.getElementById('pf-error').style.display = '';
+      return;
+    }
+
+    const btn = document.getElementById('pf-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      const tempSave = document.getElementById('temp-same') ? document.getElementById('temp-same').checked : true;
+      const data = {
+        name,
+        dob,
+        relation:             document.getElementById('pf-relation').value,
+        guardianName,
+        guardianPhone:        normalizePhone(guardianRaw),
+        addressFlat:          document.getElementById('address-flat').value.trim(),
+        addressLine2:         document.getElementById('address-line2').value.trim(),
+        addressArea:          document.getElementById('address-area').value.trim(),
+        addressDistrictState: document.getElementById('address-district-state').value.trim(),
+        addressPincode:       document.getElementById('pincode').value.trim(),
+        tempAddressSame:      tempSave,
+        tempAddressFlat:      tempSave ? '' : document.getElementById('temp-address-flat').value.trim(),
+        tempAddressLine2:     tempSave ? '' : document.getElementById('temp-address-line2').value.trim(),
+        tempAddressArea:      tempSave ? '' : document.getElementById('temp-address-area').value.trim(),
+        tempAddressDistrictState: tempSave ? '' : document.getElementById('temp-address-district-state').value.trim(),
+        tempAddressPincode:   tempSave ? '' : document.getElementById('temp-pincode').value.trim(),
+      };
+
+      await completeStudentProfile(studentId, profile.phone, data);
+
+      const session = JSON.parse(localStorage.getItem('_session') || '{}');
+      session.name = name;
+      localStorage.setItem('_session', JSON.stringify(session));
+
+      window.location.reload();
+    } catch(err) {
+      document.getElementById('pf-error').textContent = err.message || 'Save failed. Try again.';
+      document.getElementById('pf-error').style.display = '';
+      btn.disabled = false; btn.textContent = 'Save Profile';
+    }
+  };
+});
+</script>
+</body>
+</html>

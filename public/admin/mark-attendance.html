@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mark Attendance — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .mark-page  { max-width: 560px; margin: 2rem auto; padding: 0 1.25rem; }
+    .sig-canvas { width: 100%; height: 140px; display: block; touch-action: none; cursor: crosshair; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <style>
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); font-size:.9rem; font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light); color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+  </style>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="#"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="mark-attendance.html" class="active">Mark Attendance</a></li>
+    <li><a href="my-sessions.html">My Sessions</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="mark-page">
+  <div id="todays-tests"></div>
+  <div class="card">
+    <div class="card-title">Mark Attendance</div>
+
+    <div class="form-group">
+      <label>Instructor</label>
+      <input type="text" id="instructor-name" disabled style="background:var(--bg)">
+    </div>
+
+    <div class="form-group">
+      <label>Student *</label>
+      <select id="mark-student">
+        <option value="">— Select Student —</option>
+      </select>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.1rem">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;text-align:center">
+        <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.2rem">Student Sessions</div>
+        <div id="stat-student" style="font-size:1.75rem;font-weight:800;color:var(--primary)">—</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;text-align:center">
+        <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.2rem">My Sessions Marked</div>
+        <div id="stat-instructor" style="font-size:1.75rem;font-weight:800;color:var(--primary)">—</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Signature</label>
+      <div class="sig-wrap">
+        <canvas id="sig-canvas" class="sig-canvas" width="500" height="140"></canvas>
+        <div class="sig-hint" id="sig-hint"
+          style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.9rem;pointer-events:none">
+          Sign here
+        </div>
+      </div>
+      <div style="text-align:right;margin-top:.35rem">
+        <button type="button" class="btn btn-sm btn-outline" onclick="clearSig()">Clear</button>
+      </div>
+    </div>
+
+    <div id="mark-error" class="alert alert-danger" style="display:none"></div>
+    <button class="btn btn-primary" style="width:100%;padding:.85rem" onclick="submitAttendance()">
+      Save Attendance
+    </button>
+  </div>
+</div>
+
+<script>
+let sigPad = null;
+let _session = null;
+let _tsStudent = null;
+
+requireAuth(['mentor']).then(async ({ profile }) => {
+  _session = profile;
+
+  if (!profile.name) {
+    document.querySelector('.mark-page').innerHTML = `
+      <div class="card" style="max-width:480px;margin:2rem auto">
+        <div style="font-size:1.4rem;font-weight:800;margin-bottom:.3rem">Welcome! 👋</div>
+        <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.5rem">Enter your name to get started.</p>
+        <div class="form-group">
+          <label>Full Name <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="pf-name" placeholder="Your full name" maxlength="80"
+            onkeydown="if(event.key==='Enter') saveMentorProfile()">
+        </div>
+        <div id="pf-error" class="alert alert-danger" style="display:none;margin-bottom:1rem"></div>
+        <button class="btn btn-primary" style="width:100%" id="pf-btn" onclick="saveMentorProfile()">Save &amp; Continue</button>
+      </div>`;
+
+    window.saveMentorProfile = async function() {
+      const name = document.getElementById('pf-name').value.trim();
+      if (!name) { document.getElementById('pf-error').textContent = 'Please enter your name.'; document.getElementById('pf-error').style.display = ''; return; }
+      document.getElementById('pf-error').style.display = 'none';
+      const btn = document.getElementById('pf-btn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        await completeMentorProfile(profile.phone, name);
+        const session = JSON.parse(localStorage.getItem('_session') || '{}');
+        session.name = name;
+        localStorage.setItem('_session', JSON.stringify(session));
+        window.location.reload();
+      } catch(e) {
+        document.getElementById('pf-error').textContent = e.message || 'Save failed. Try again.';
+        document.getElementById('pf-error').style.display = '';
+        btn.disabled = false; btn.textContent = 'Save & Continue';
+      }
+    };
+    return;
+  }
+
+  document.getElementById('instructor-name').value = profile.name;
+
+  refreshInstructorStat();
+
+  try {
+    const todaysTests = await getTodaysDrivingTests();
+    if (todaysTests.length) {
+      const fmtTime = ts => ts.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('todays-tests').innerHTML = `
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-title">Today's Driving Tests (${todaysTests.length})</div>
+          ${todaysTests.map(t => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
+              <div>
+                <strong>${escapeHtml(t.studentName)}</strong>
+                <span class="td-muted" style="font-size:.82rem;margin-left:.4rem">${escapeHtml(t.enrollmentNumber || '')}</span>
+              </div>
+              <div style="font-size:.875rem;font-weight:600">${fmtTime(t.scheduledAt)}${t.venue ? ' · ' + escapeHtml(t.venue) : ''}</div>
+            </div>`).join('')}
+        </div>`;
+    }
+  } catch { /* non-critical */ }
+
+  const students = await getStudents({ status: 'all' });
+  const sel = document.getElementById('mark-student');
+  students.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.enrollmentNumber})`;
+    sel.appendChild(opt);
+  });
+
+  _tsStudent = new TomSelect('#mark-student', {
+    placeholder: '— Type to search student —',
+    allowEmptyOption: true, create: false, maxOptions: null,
+    onChange: () => onStudentChange(),
+  });
+
+  sigPad = initSignaturePad('sig-canvas');
+  sigPad.clear();
+
+  document.getElementById('sig-canvas').addEventListener('mousedown', hideSigHint);
+  document.getElementById('sig-canvas').addEventListener('touchstart', hideSigHint, { passive: false });
+});
+
+async function refreshInstructorStat() {
+  try {
+    const records = await getMentorAttendance(_session.phone);
+    document.getElementById('stat-instructor').textContent = records.length;
+  } catch { /* non-critical */ }
+}
+
+async function onStudentChange() {
+  const studentId = document.getElementById('mark-student').value;
+  const el = document.getElementById('stat-student');
+  if (!studentId) { el.textContent = '—'; return; }
+  try {
+    const records = await getStudentAttendance(studentId);
+    el.textContent = records.length;
+  } catch { el.textContent = '—'; }
+}
+
+function hideSigHint() { document.getElementById('sig-hint').style.display = 'none'; }
+function clearSig() {
+  if (sigPad) sigPad.clear();
+  document.getElementById('sig-hint').style.display = '';
+}
+
+async function submitAttendance() {
+  const errEl     = document.getElementById('mark-error');
+  errEl.style.display = 'none';
+  const studentId = document.getElementById('mark-student').value;
+
+  if (!studentId) { errEl.textContent = 'Select a student.'; errEl.style.display = ''; return; }
+  if (!sigPad || sigPad.isEmpty()) { errEl.textContent = 'Signature is required.'; errEl.style.display = ''; return; }
+
+  const btn = document.querySelector('button.btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    await markAttendance({
+      studentId,
+      markedBy:        _session.phone,
+      markedByRole:    'mentor',
+      mentorName:      _session.name,
+      signatureDataURL: sigPad.getDataURL()
+    });
+    showToast('Attendance saved.', 'success');
+    if (_tsStudent) _tsStudent.clear();
+    document.getElementById('stat-student').textContent = '—';
+    clearSig();
+    refreshInstructorStat();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Attendance';
+  }
+}
+</script>
+</body>
+</html>

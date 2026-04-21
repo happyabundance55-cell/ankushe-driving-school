@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicle Classes — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .class-list { display:flex;flex-direction:column;gap:.5rem;margin-top:1rem; }
+    .class-item { display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;font-weight:600; }
+    .add-row { display:flex;gap:.75rem;align-items:flex-end; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:560px">
+  <div class="page-title">
+    Vehicle Classes
+    <a href="student-form.html" class="btn btn-outline btn-sm">← Back to Student Form</a>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Add Vehicle Class</div>
+    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:1rem">
+      Vehicle classes appear in student forms and government reports (Form 14 / Form 15).<br>
+      Examples: LMV, LMV-TR, MCWG, HMV, HGMV
+    </p>
+    <div class="add-row">
+      <div class="form-group" style="flex:1;margin-bottom:0">
+        <label>Class Name</label>
+        <input type="text" id="new-class" placeholder="e.g. LMV-TR"
+          style="text-transform:uppercase"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addClass();}">
+      </div>
+      <button class="btn btn-primary" onclick="addClass()">Add</button>
+    </div>
+    <div id="add-error" class="alert alert-danger" style="display:none;margin-top:.75rem"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Existing Classes</div>
+    <div id="class-list">
+      <div class="loading"><div class="spinner"></div> Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+requireAuth(['admin']).then(() => loadClasses());
+
+async function loadClasses() {
+  const el = document.getElementById('class-list');
+  try {
+    const classes = await getVehicleClasses();
+    if (!classes.length) {
+      el.innerHTML = '<div class="empty-state" style="padding:1rem 0"><h3>No vehicle classes yet</h3><p>Add your first class above.</p></div>';
+      return;
+    }
+    el.innerHTML = `<div class="class-list">
+      ${classes.map(c => `
+        <div class="class-item">
+          <span>${escapeHtml(c.name)}</span>
+          <button class="btn btn-sm btn-danger" onclick="removeClass('${c.id}', '${escapeHtml(c.name)}')">Delete</button>
+        </div>`).join('')}
+    </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+async function addClass() {
+  const input = document.getElementById('new-class');
+  const errEl = document.getElementById('add-error');
+  errEl.style.display = 'none';
+  const name = input.value.trim();
+  if (!name) { errEl.textContent = 'Enter a class name.'; errEl.style.display = ''; return; }
+  try {
+    await addVehicleClass(name);
+    input.value = '';
+    showToast(`${name.toUpperCase()} added.`, 'success');
+    loadClasses();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  }
+}
+
+async function removeClass(id, name) {
+  if (!confirm(`Delete vehicle class "${name}"?`)) return;
+  try {
+    await deleteVehicleClass(id);
+    showToast(`${name} deleted.`, 'success');
+    loadClasses();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+</script>
+</body>
+</html>

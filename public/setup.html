@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>First-Run Setup — Ankushe Driving School</title>
+  <link rel="stylesheet" href="shared/css/main.css">
+  <script src="shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="shared/js/auth.js"></script>
+  <script src="shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <h1>🚗 Ankushe Driving School</h1>
+      <p>First-Run Setup — Create Admin Account</p>
+    </div>
+    <div class="alert alert-warning">
+      This screen appears only once. The first account created becomes the admin.
+    </div>
+    <div class="form-group">
+      <label>Your Name</label>
+      <input type="text" id="name" placeholder="Full name" pattern="[A-Za-z ]+" title="Alphabets and spaces only">
+    </div>
+    <div class="form-group">
+      <label>Mobile Number</label>
+      <input type="tel" id="phone" placeholder="98765 43210" maxlength="10" pattern="\d{10}" title="Enter exactly 10 digits">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="setup()">Create Admin Account</button>
+    <div id="setup-error" class="alert alert-danger" style="display:none;margin-top:1rem"></div>
+    <div id="setup-loading" class="loading" style="display:none;padding:1rem 0">
+      <div class="spinner"></div> Setting up…
+    </div>
+  </div>
+</div>
+
+<script>
+const { db } = initFirebase();
+
+async function setup() {
+  const name  = document.getElementById('name').value.trim();
+  const raw   = document.getElementById('phone').value.trim();
+  const errEl = document.getElementById('setup-error');
+  errEl.style.display = 'none';
+
+  if (!name)                        { errEl.textContent = 'Enter your name.';                       errEl.style.display = ''; return; }
+  if (!/^[A-Za-z ]+$/.test(name))  { errEl.textContent = 'Name must contain alphabets and spaces only.'; errEl.style.display = ''; return; }
+  if (!raw)   { errEl.textContent = 'Enter your phone number.'; errEl.style.display = ''; return; }
+
+  if (!/^\d{10}$/.test(raw)) { errEl.textContent = 'Enter a valid 10-digit number.'; errEl.style.display = ''; return; }
+  const phone = normalizePhone(raw);
+
+  document.getElementById('setup-loading').style.display = '';
+
+  try {
+    const setupSnap = await db.collection('counters').doc('setup').get();
+    if (setupSnap.exists) {
+      errEl.textContent = 'Setup already completed. Go to login.';
+      errEl.style.display = '';
+      document.getElementById('setup-loading').style.display = 'none';
+      return;
+    }
+
+    const batch = db.batch();
+    batch.set(db.collection('users').doc(phone), {
+      name, phone, role: 'admin', studentId: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    batch.set(db.collection('counters').doc('setup'), {
+      completedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+
+    // Auto-login as admin
+    sessionStorage.setItem('_session', JSON.stringify({ phone, role: 'admin', name, studentId: null }));
+    window.location.href = '/admin/dashboard.html';
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  } finally {
+    document.getElementById('setup-loading').style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>

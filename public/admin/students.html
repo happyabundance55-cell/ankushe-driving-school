@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Students — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <style>
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); font-size:.9rem; font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light); color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+  </style>
+  <style>
+    .nav-logo-img {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html" class="active">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container">
+  <div class="page-title">
+    Students
+    <div class="page-title-actions">
+      <a href="student-form.html" class="btn btn-primary">+ Add Student</a>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group" style="flex:1;min-width:200px">
+      <label>Search</label>
+      <input type="text" id="search" placeholder="Name, phone, or enrollment no…" oninput="applyFilters()">
+    </div>
+    <div class="filter-group">
+      <label>Status</label>
+      <select id="status-filter">
+        <option value="all">All</option>
+        <option value="active" selected>Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Balance</label>
+      <select id="balance-filter">
+        <option value="all">All</option>
+        <option value="outstanding">Has Balance Due</option>
+        <option value="cleared">Fully Paid</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="student-count" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem"></div>
+
+  <div class="table-wrap" style="max-height:560px;overflow-y:auto">
+    <table>
+      <thead style="position:sticky;top:0;z-index:1">
+        <tr>
+          <th>Student</th>
+          <th>Enrollment No</th>
+          <th>Phone</th>
+          <th>Enrolled</th>
+          <th>Total Fee</th>
+          <th>Balance</th>
+          <th>Status</th>
+          <th class="no-print">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="student-table-body">
+        <tr><td colspan="8"><div class="loading"><div class="spinner"></div> Loading…</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let _allStudents = [];
+
+requireAuth(['admin']).then(async () => {
+  new TomSelect('#status-filter', {
+    allowEmptyOption: false, create: false,
+    onChange: () => applyFilters(),
+  });
+  new TomSelect('#balance-filter', {
+    allowEmptyOption: false, create: false,
+    onChange: () => applyFilters(),
+  });
+  _allStudents = await getStudents({ status: 'active' });
+  renderTable(_allStudents);
+});
+
+async function applyFilters() {
+  const search  = document.getElementById('search').value.trim().toLowerCase();
+  const status  = document.getElementById('status-filter').value;
+  const balance = document.getElementById('balance-filter').value;
+
+  _allStudents = await getStudents({ status });
+
+  let list = _allStudents;
+  if (search) {
+    list = list.filter(s =>
+      s.name.toLowerCase().includes(search) ||
+      s.phone.includes(search) ||
+      s.enrollmentNumber.toLowerCase().includes(search)
+    );
+  }
+  if (balance === 'outstanding') list = list.filter(s => s.balance > 0);
+  if (balance === 'cleared')     list = list.filter(s => s.balance <= 0);
+
+  renderTable(list);
+}
+
+function renderTable(students) {
+  const body = document.getElementById('student-table-body');
+  document.getElementById('student-count').textContent = `${students.length} student${students.length !== 1 ? 's' : ''}`;
+
+  if (!students.length) {
+    body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><h3>No students found</h3></div></td></tr>';
+    return;
+  }
+
+  body.innerHTML = students.map(s => `<tr>
+    <td>
+      <div style="display:flex;align-items:center;gap:.6rem">
+        ${s.photoURL
+          ? `<img src="${escapeHtml(s.photoURL)}" class="student-photo" style="width:36px;height:36px">`
+          : `<div class="student-photo-placeholder" style="width:36px;height:36px;font-size:1rem">👤</div>`}
+        <strong>${escapeHtml(s.name)}</strong>
+      </div>
+    </td>
+    <td class="td-muted">${escapeHtml(s.enrollmentNumber)}</td>
+    <td class="td-muted">${displayPhone(s.phone)}</td>
+    <td class="td-muted">${formatDate(s.enrollmentDate)}</td>
+    <td class="td-amount">${formatCurrency(s.totalFee)}</td>
+    <td class="td-amount" style="color:${s.balance > 0 ? 'var(--danger)' : 'var(--success)'}">
+      ${formatCurrency(s.balance)}
+    </td>
+    <td><span class="badge badge-${s.status === 'active' ? 'success' : 'muted'}">${s.status}</span></td>
+    <td class="no-print">
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+        <a href="student-profile.html?id=${s.id}" class="btn btn-sm btn-outline">Profile</a>
+        <a href="student-form.html?id=${s.id}"    class="btn btn-sm btn-outline">Edit</a>
+        <a href="fees.html?id=${s.id}"            class="btn btn-sm btn-outline">Fees</a>
+        <a href="attendance.html?id=${s.id}"           class="btn btn-sm btn-outline">Attendance</a>
+        <a href="driving-tests.html?student=${s.id}" class="btn btn-sm btn-outline">Test</a>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roster — Ankushe Driving School</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;font-family:inherit;padding:.48rem .75rem;box-shadow:none; }
+    .ts-wrapper.single.focus .ts-control { border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .ts-dropdown { border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);font-size:.9rem;font-family:inherit; }
+    .ts-dropdown .option.active { background:var(--primary-light);color:var(--primary); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+
+    .week-nav { display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem; }
+    .week-label { font-size:1rem;font-weight:700;min-width:200px;text-align:center; }
+    .week-nav .btn { padding:.4rem .85rem; }
+
+    .day-card { background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:.9rem;overflow:hidden; }
+    .day-header { display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;background:var(--bg);border-bottom:1px solid var(--border); }
+    .day-name { font-weight:700;font-size:.95rem; }
+    .day-date { font-size:.82rem;color:var(--text-muted); }
+
+    .day-body { padding:.75rem 1rem; }
+    .slot-group { margin-bottom:.75rem; }
+    .slot-group-title { font-size:.8rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem; }
+    .slot-row { display:flex;align-items:center;gap:.5rem;padding:.3rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:.3rem;font-size:.85rem; }
+    .slot-row .slot-name { flex:1;font-weight:600; }
+    .slot-row .slot-enroll { color:var(--text-muted);font-size:.8rem; }
+    .slot-del { border:none;background:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:0 .2rem;line-height:1;flex-shrink:0; }
+    .slot-del:hover { opacity:.7; }
+
+    .add-slot-form { display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;margin-top:.6rem;padding-top:.6rem;border-top:1px dashed var(--border); }
+    .add-slot-form .form-group { margin-bottom:0;flex:1;min-width:140px; }
+    .add-slot-form label { font-size:.78rem; }
+    .add-slot-form .btn { flex-shrink:0;white-space:nowrap; }
+
+    .empty-day { color:var(--text-muted);font-size:.85rem;font-style:italic;padding:.25rem 0 .5rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="roster.html" class="active">Roster</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:860px">
+  <div class="page-title">
+    Weekly Roster
+    <div class="page-title-actions">
+      <button class="btn btn-outline btn-sm" onclick="confirmClearWeek()">Clear Week</button>
+      <button class="btn btn-primary btn-sm" onclick="runAutoGenerate()">Auto-generate</button>
+    </div>
+  </div>
+
+  <div class="week-nav">
+    <button class="btn btn-outline" onclick="shiftWeek(-1)">← Prev</button>
+    <div class="week-label" id="week-label"></div>
+    <button class="btn btn-outline" onclick="shiftWeek(1)">Next →</button>
+  </div>
+
+  <div id="roster-body">
+    <div class="loading" style="padding:2rem 0"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script>
+initFirebase();
+let _students = [], _instructors = [];
+let _currentMonday = null;
+let _slots = [];
+// TomSelect instances per day: { dateStr: { instr: ts, student: ts } }
+const _dayTs = {};
+
+requireAuth(['admin']).then(async () => {
+  [_students, _instructors] = await Promise.all([
+    getStudents({ status: 'active' }),
+    getActiveInstructors()
+  ]);
+  _currentMonday = getMondayOf(new Date());
+  renderWeek();
+});
+
+/* ─── Week helpers ────────────────────────────────────────────────────────── */
+function getMondayOf(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function weekStartStr(monday) {
+  return monday.toISOString().slice(0, 10);
+}
+
+function shiftWeek(dir) {
+  _currentMonday = new Date(_currentMonday);
+  _currentMonday.setDate(_currentMonday.getDate() + dir * 7);
+  renderWeek();
+}
+
+/* ─── Render ──────────────────────────────────────────────────────────────── */
+async function renderWeek() {
+  const monday  = _currentMonday;
+  const sunday  = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const weekStr = weekStartStr(monday);
+  const fmtDate = d => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  document.getElementById('week-label').textContent = `${fmtDate(monday)} – ${fmtDate(sunday)}`;
+
+  const body = document.getElementById('roster-body');
+  body.innerHTML = '<div class="loading" style="padding:2rem 0"><div class="spinner"></div></div>';
+
+  try {
+    _slots = await getRosterSlots(weekStr);
+  } catch(e) {
+    body.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    return;
+  }
+
+  const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  let html = '';
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dateStr  = d.toISOString().slice(0, 10);
+    const daySlots = _slots.filter(s => s.date === dateStr);
+
+    // Group slots by instructor
+    const byInstr = {};
+    daySlots.forEach(s => {
+      if (!byInstr[s.instructorName]) byInstr[s.instructorName] = [];
+      byInstr[s.instructorName].push(s);
+    });
+
+    const dateLabel = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+
+    html += `<div class="day-card">
+      <div class="day-header">
+        <div>
+          <span class="day-name">${DAY_NAMES[i]}</span>
+          <span class="day-date" style="margin-left:.5rem">${dateLabel}</span>
+        </div>
+        <span class="badge ${daySlots.length ? 'badge-primary' : ''}" style="${daySlots.length ? '' : 'background:var(--bg);color:var(--text-muted);border:1px solid var(--border)'}">
+          ${daySlots.length} slot${daySlots.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div class="day-body">`;
+
+    if (Object.keys(byInstr).length) {
+      Object.entries(byInstr).sort(([a],[b]) => a.localeCompare(b)).forEach(([instrName, slots]) => {
+        html += `<div class="slot-group">
+          <div class="slot-group-title">🧑‍🏫 ${escapeHtml(instrName)}</div>`;
+        slots.forEach(s => {
+          html += `<div class="slot-row">
+            <span class="slot-name">${escapeHtml(s.studentName)}</span>
+            <span class="slot-enroll">${escapeHtml(s.enrollmentNumber)}</span>
+            <button class="slot-del" onclick="removeSlot('${s.id}')" title="Remove">✕</button>
+          </div>`;
+        });
+        html += `</div>`;
+      });
+    } else {
+      html += `<div class="empty-day">No slots scheduled</div>`;
+    }
+
+    // Add slot form
+    const instrOptHtml = _instructors.map(i => `<option value="${escapeHtml(i.phone)}" data-name="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join('');
+    const studOptHtml  = _students.map(s  => `<option value="${s.id}" data-enroll="${escapeHtml(s.enrollmentNumber)}">${escapeHtml(s.name)} (${escapeHtml(s.enrollmentNumber)})</option>`).join('');
+
+    html += `<div class="add-slot-form">
+      <div class="form-group">
+        <label>Instructor</label>
+        <select id="add-instr-${dateStr}" class="add-instr-sel">
+          <option value="">— Select —</option>${instrOptHtml}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Student</label>
+        <select id="add-stud-${dateStr}" class="add-stud-sel">
+          <option value="">— Select —</option>${studOptHtml}
+        </select>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="addSlotForDay('${dateStr}','${weekStr}')">Add</button>
+    </div>`;
+
+    html += `</div></div>`;
+  }
+
+  body.innerHTML = html;
+
+  // Init TomSelect for all add-slot dropdowns
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    _dayTs[dateStr] = {
+      instr:   new TomSelect(`#add-instr-${dateStr}`, { placeholder: '— Select —', allowEmptyOption: true, create: false }),
+      student: new TomSelect(`#add-stud-${dateStr}`,  { placeholder: '— Select —', allowEmptyOption: true, create: false })
+    };
+  }
+}
+
+/* ─── Slot actions ────────────────────────────────────────────────────────── */
+async function addSlotForDay(dateStr, weekStr) {
+  const ts = _dayTs[dateStr];
+  const instrSel = document.getElementById(`add-instr-${dateStr}`);
+  const studSel  = document.getElementById(`add-stud-${dateStr}`);
+
+  const instrPhone = instrSel.value;
+  const studentId  = studSel.value;
+
+  if (!instrPhone) { showToast('Select an instructor.', 'warning'); return; }
+  if (!studentId)  { showToast('Select a student.',     'warning'); return; }
+
+  const instrOpt = instrSel.options[instrSel.selectedIndex];
+  const studOpt  = studSel.options[studSel.selectedIndex];
+  const student  = _students.find(s => s.id === studentId);
+
+  try {
+    await addRosterSlot({
+      weekStart:       weekStr,
+      date:            dateStr,
+      instructorPhone: instrPhone,
+      instructorName:  instrOpt.dataset.name || instrOpt.text,
+      studentId,
+      studentName:     student?.name || studOpt.text.split(' (')[0],
+      enrollmentNumber: student?.enrollmentNumber || ''
+    });
+    showToast('Slot added.', 'success');
+    ts?.instr?.clear();
+    ts?.student?.clear();
+    refreshSlots(weekStr);
+  } catch(e) { showToast(e.message, 'danger'); }
+}
+
+async function removeSlot(id) {
+  if (!confirm('Remove this slot?')) return;
+  try {
+    await deleteRosterSlot(id);
+    showToast('Removed.', 'success');
+    refreshSlots(weekStartStr(_currentMonday));
+  } catch(e) { showToast(e.message, 'danger'); }
+}
+
+async function refreshSlots(weekStr) {
+  try {
+    _slots = await getRosterSlots(weekStr);
+  } catch { return; }
+
+  const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(_currentMonday);
+    d.setDate(_currentMonday.getDate() + i);
+    const dateStr  = d.toISOString().slice(0, 10);
+    const daySlots = _slots.filter(s => s.date === dateStr);
+    const byInstr  = {};
+    daySlots.forEach(s => {
+      if (!byInstr[s.instructorName]) byInstr[s.instructorName] = [];
+      byInstr[s.instructorName].push(s);
+    });
+
+    const dayBody = document.querySelector(`#roster-body .day-card:nth-child(${i+1}) .day-body`);
+    const dayBadge = document.querySelector(`#roster-body .day-card:nth-child(${i+1}) .badge`);
+    if (!dayBody) continue;
+
+    // Remove existing slot groups + empty-day (keep add form)
+    [...dayBody.querySelectorAll('.slot-group,.empty-day')].forEach(el => el.remove());
+
+    // Update badge
+    if (dayBadge) {
+      dayBadge.textContent = `${daySlots.length} slot${daySlots.length !== 1 ? 's' : ''}`;
+      if (daySlots.length) { dayBadge.className = 'badge badge-primary'; }
+      else { dayBadge.className = 'badge'; dayBadge.style = 'background:var(--bg);color:var(--text-muted);border:1px solid var(--border)'; }
+    }
+
+    const addForm = dayBody.querySelector('.add-slot-form');
+    if (Object.keys(byInstr).length) {
+      Object.entries(byInstr).sort(([a],[b]) => a.localeCompare(b)).forEach(([instrName, slots]) => {
+        const grp = document.createElement('div');
+        grp.className = 'slot-group';
+        grp.innerHTML = `<div class="slot-group-title">🧑‍🏫 ${escapeHtml(instrName)}</div>` +
+          slots.map(s => `<div class="slot-row">
+            <span class="slot-name">${escapeHtml(s.studentName)}</span>
+            <span class="slot-enroll">${escapeHtml(s.enrollmentNumber)}</span>
+            <button class="slot-del" onclick="removeSlot('${s.id}')" title="Remove">✕</button>
+          </div>`).join('');
+        dayBody.insertBefore(grp, addForm);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'empty-day';
+      empty.textContent = 'No slots scheduled';
+      dayBody.insertBefore(empty, addForm);
+    }
+  }
+}
+
+/* ─── Auto-generate ───────────────────────────────────────────────────────── */
+async function runAutoGenerate() {
+  const weekStr = weekStartStr(_currentMonday);
+  const existing = _slots.length;
+  if (existing > 0 && !confirm(`This will replace the ${existing} existing slot(s) for this week. Continue?`)) return;
+
+  const btn = document.querySelector('.btn-primary[onclick="runAutoGenerate()"]');
+  btn.disabled = true; btn.textContent = 'Generating…';
+  try {
+    const count = await autoGenerateRoster(weekStr, _students, _instructors);
+    showToast(`${count} slots generated for the week.`, 'success');
+    renderWeek();
+  } catch(e) {
+    showToast(e.message, 'danger');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Auto-generate';
+  }
+}
+
+async function confirmClearWeek() {
+  if (!confirm('Clear all slots for this week?')) return;
+  try {
+    await clearRosterWeek(weekStartStr(_currentMonday));
+    showToast('Week cleared.', 'success');
+    renderWeek();
+  } catch(e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>

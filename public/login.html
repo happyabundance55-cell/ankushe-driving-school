@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — Ankushe Driving School</title>
+  <link rel="stylesheet" href="shared/css/main.css">
+  <script src="shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="shared/js/auth.js"></script>
+  <script src="shared/js/db.js"></script>
+  <script src="shared/js/utils.js"></script>
+  <style>
+    /* ── Card ───────────────────────────────────────────────── */
+    .login-card {
+      background: rgba(8,5,2,.80) !important;
+      border: none !important;
+      border-top: 3px solid transparent !important;
+      border-image: linear-gradient(90deg,#b36a00,#f0a500,#ffe066,#f0a500,#b36a00) 1 !important;
+      box-shadow:
+        0 40px 100px rgba(0,0,0,.7),
+        0 8px 30px rgba(0,0,0,.5),
+        inset 0 1px 0 rgba(255,210,100,.08) !important;
+      backdrop-filter: blur(22px) saturate(1.4) !important;
+      -webkit-backdrop-filter: blur(22px) saturate(1.4) !important;
+      max-width: 400px !important;
+      padding: 1.4rem 2rem 1.4rem !important;
+    }
+
+    /* ── Logo area ──────────────────────────────────────────── */
+    .login-logo { margin-bottom: .9rem !important; }
+    .login-logo-icon { display: none !important; }
+    .login-logo h1 {
+      color: #ede8e2 !important;
+      font-size: 1.3rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -.02em !important;
+      line-height: 1.2 !important;
+    }
+
+    /* ── All text inside card ───────────────────────────────── */
+    .login-card, .login-card p, .login-card div, .login-card span,
+    .login-card label { color: #e0d2be !important; }
+
+    /* ── Inputs ─────────────────────────────────────────────── */
+    .login-card input[type="tel"],
+    .login-card input[type="text"],
+    .login-card input[type="email"],
+    .login-card input[type="password"] {
+      background: rgba(255,255,255,.06) !important;
+      border: 1px solid rgba(255,255,255,.14) !important;
+      color: #fff !important;
+      border-radius: 10px !important;
+      height: 48px !important;
+      font-size: 1rem !important;
+    }
+    .login-card input::placeholder { color: rgba(255,255,255,.25) !important; }
+    .login-card input:focus {
+      border-color: rgba(240,165,0,.6) !important;
+      box-shadow: 0 0 0 3px rgba(240,155,0,.15) !important;
+      outline: none !important;
+    }
+    .login-card label {
+      font-size: .75rem !important;
+      font-weight: 600 !important;
+      letter-spacing: .06em !important;
+      text-transform: uppercase !important;
+      color: rgba(255,195,80,.55) !important;
+    }
+
+    /* ── Primary button ─────────────────────────────────────── */
+    .login-card .btn-primary {
+      background: linear-gradient(135deg,#d4870a,#a85f00) !important;
+      border: none !important;
+      box-shadow: 0 4px 20px rgba(210,130,10,.4), inset 0 1px 0 rgba(255,220,100,.2) !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      letter-spacing: .04em !important;
+      border-radius: 10px !important;
+      height: 48px !important;
+      font-size: .9rem !important;
+      transition: all .2s ease !important;
+    }
+    .login-card .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg,#eca020,#c07010) !important;
+      box-shadow: 0 8px 32px rgba(220,150,10,.5), inset 0 1px 0 rgba(255,230,120,.25) !important;
+      transform: translateY(-2px) !important;
+    }
+    .login-card .btn-primary:active:not(:disabled) { transform: translateY(0) !important; }
+
+    /* ── Outline button ─────────────────────────────────────── */
+    .login-card .btn-outline {
+      background: rgba(255,255,255,.05) !important;
+      border: 1px solid rgba(255,255,255,.18) !important;
+      color: #c8b89a !important;
+      border-radius: 10px !important;
+      height: 44px !important;
+      font-size: .875rem !important;
+    }
+    .login-card .btn-outline:hover {
+      background: rgba(255,255,255,.1) !important;
+      border-color: rgba(255,195,80,.4) !important;
+      color: #e8d8b8 !important;
+    }
+
+    /* ── Back link ──────────────────────────────────────────── */
+    .back-link {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-size: .8rem; color: rgba(240,165,0,.7) !important;
+      cursor: pointer; border: none; background: none;
+      font-family: inherit; padding: 0; margin-bottom: 1.25rem;
+      letter-spacing: .04em; font-weight: 500;
+      transition: color .15s;
+    }
+    .back-link:hover { color: #f0a500 !important; text-decoration: none; }
+
+    /* ── Error alert ────────────────────────────────────────── */
+    .login-card .alert-danger {
+      background: rgba(220,38,38,.15) !important;
+      border-color: rgba(220,38,38,.3) !important;
+      color: #fca5a5 !important;
+      border-radius: 10px !important;
+    }
+
+    /* ── Divider inside card ────────────────────────────────── */
+    .login-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,185,60,.18), transparent);
+      margin: 1.5rem 0;
+    }
+
+    /* ── "Who are you?" label ───────────────────────────────── */
+    #step-role > p {
+      text-align: center !important;
+      font-size: .68rem !important;
+      font-weight: 700 !important;
+      letter-spacing: .18em !important;
+      text-transform: uppercase !important;
+      color: rgba(240,165,0,.5) !important;
+      margin-bottom: .65rem !important;
+    }
+
+    /* ── Role cards ─────────────────────────────────────────── */
+    .role-cards {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: .55rem; margin: .5rem 0 .9rem;
+    }
+    .role-card {
+      background: rgba(255,255,255,.055);
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 14px;
+      padding: .7rem .5rem .65rem;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+      transition: all .2s ease;
+      position: relative; overflow: hidden;
+    }
+    .role-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,195,80,.2), transparent);
+    }
+    .role-card:hover {
+      border-color: rgba(240,165,0,.5);
+      background: rgba(240,140,0,.12);
+      box-shadow: 0 8px 28px rgba(0,0,0,.4), 0 0 20px rgba(240,140,0,.12),
+                  inset 0 1px 0 rgba(255,210,80,.15);
+      transform: translateY(-4px);
+    }
+    .role-card.selected {
+      border-color: rgba(240,165,0,.8);
+      background: rgba(220,130,0,.18);
+      box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 30px rgba(240,140,0,.2),
+                  inset 0 1px 0 rgba(255,215,90,.2);
+      transform: translateY(-3px);
+    }
+    .role-card .label {
+      font-size: .72rem !important;
+      font-weight: 700 !important;
+      color: #ddd0be !important;
+      letter-spacing: .08em !important;
+      text-transform: uppercase !important;
+    }
+
+    /* ── Welcome screen ─────────────────────────────────────── */
+    #step-welcome .welcome-avatar {
+      width: 60px; height: 60px;
+      background: linear-gradient(145deg,rgba(240,165,0,.2),rgba(180,100,0,.1));
+      border: 1.5px solid rgba(240,165,0,.3);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto .9rem;
+      font-size: 1.6rem;
+    }
+
+    /* ── Google button ──────────────────────────────────────── */
+    #google-signin-btn {
+      background: rgba(255,255,255,.08) !important;
+      border: 1px solid rgba(255,255,255,.2) !important;
+      color: #e8ddd0 !important;
+      font-weight: 600 !important;
+      border-radius: 10px !important;
+      height: 50px !important;
+      font-size: .9rem !important;
+      transition: all .2s ease !important;
+      letter-spacing: .02em !important;
+    }
+    #google-signin-btn:hover:not(:disabled) {
+      background: rgba(255,255,255,.14) !important;
+      border-color: rgba(240,165,0,.45) !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.3) !important;
+    }
+
+    /* ── Admin login note ───────────────────────────────────── */
+    .admin-note {
+      text-align: center;
+      font-size: .75rem !important;
+      color: rgba(255,195,80,.4) !important;
+      margin-top: 1rem;
+      letter-spacing: .04em;
+    }
+
+    .step { display: none; }
+    .step.active { display: block; }
+    @media(max-width:480px){
+      .role-card .label { font-size: .6rem !important; letter-spacing: .02em !important; }
+    }
+    @media(max-width:380px){ .role-cards{grid-template-columns:1fr 1fr;} }
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(240,165,0,.88)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <circle cx="12" cy="12" r="2.5"/>
+          <line x1="12" y1="9.5" x2="12" y2="3.5"/>
+          <line x1="8.4" y1="11.2" x2="3" y2="8.2"/>
+          <line x1="15.6" y1="11.2" x2="21" y2="8.2"/>
+        </svg>
+      </div>
+      <h1>Ankushe Driving School</h1>
+    </div>
+
+    <!-- Step: Welcome (returning user) -->
+    <div id="step-welcome" class="step">
+      <div style="text-align:center;padding:.1rem 0 .5rem">
+        <div class="welcome-avatar">👤</div>
+        <div style="font-size:1.2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.3rem;color:#fff">
+          Welcome back, <span id="welcome-name"></span>
+        </div>
+        <div style="font-size:.82rem;color:rgba(240,165,0,.6);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1.25rem" id="welcome-role"></div>
+        <button class="btn btn-primary btn-lg" style="width:100%" onclick="goToApp()">Continue</button>
+        <button class="btn btn-outline" style="width:100%;margin-top:.6rem" onclick="switchAccount()">Switch account</button>
+      </div>
+    </div>
+
+    <!-- Step: Role selection -->
+    <div id="step-role" class="step">
+      <p style="text-align:center;font-size:.9rem;color:var(--text-muted);margin-bottom:.25rem">Who are you?</p>
+      <div class="role-cards">
+        <div class="role-card" onclick="selectRole('admin')">
+          <div class="label">Admin</div>
+        </div>
+        <div class="role-card" onclick="selectRole('mentor')">
+          <div class="label">Instructor</div>
+        </div>
+        <div class="role-card" onclick="selectRole('student')">
+          <div class="label">Student</div>
+        </div>
+      </div>
+      <div id="referral-banner" style="display:none;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:.75rem 1rem;font-size:.875rem;text-align:center;margin-top:.5rem;color:#6ee7b7"></div>
+    </div>
+
+    <!-- Step: Admin Google Sign-In -->
+    <div id="step-admin-google" class="step">
+      <button class="back-link" onclick="goToStep('role')">← Back</button>
+      <div style="font-weight:700;font-size:1.05rem;margin-bottom:.25rem;color:#fff">Admin Login</div>
+
+      <button class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:.7rem" onclick="signInWithGoogle()" id="google-signin-btn">
+        <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0"><path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-21 0-1.3-.2-2.7-.5-4z"/></svg>
+        Sign in with Google
+      </button>
+      <p class="admin-note">Access restricted to authorised account only</p>
+    </div>
+
+    <!-- Step: Phone (student/instructor) -->
+    <div id="step-phone" class="step">
+      <button class="back-link" onclick="goToStep('role')">← Back</button>
+      <div style="font-weight:700;font-size:1rem;margin-bottom:.25rem" id="phone-role-label">Login</div>
+      <div class="form-group" style="margin-top:.75rem">
+        <label>Mobile Number</label>
+        <input type="tel" id="phone-input" placeholder="98765 43210" maxlength="10" pattern="\d{10}" style="max-width:100%"
+          onkeydown="if(event.key==='Enter') lookupPhone()">
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="lookupPhone()" id="lookup-btn">Continue</button>
+    </div>
+
+    <!-- Step: Create profile (new user) -->
+    <div id="step-create" class="step">
+      <button class="back-link" onclick="goToStep('phone')">← Back</button>
+      <div style="font-weight:700;font-size:1.05rem;margin-bottom:.2rem;color:#fff" id="create-title">Create Profile</div>
+      <p style="font-size:.78rem;color:rgba(255,195,80,.45);margin-bottom:1rem;line-height:1.5" id="create-subtitle"></p>
+      <div class="form-group">
+        <label>Full Name <span style="color:#f87171">*</span></label>
+        <input type="text" id="create-name" placeholder="Your full name" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label>Address <span style="color:#f87171">*</span></label>
+        <input type="text" id="create-address" placeholder="House / Street / City" maxlength="160">
+      </div>
+      <div class="form-group" id="create-dob-wrap">
+        <label>Date of Birth <span style="color:#f87171">*</span></label>
+        <input type="date" id="create-dob">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:.25rem" onclick="createProfile()" id="create-btn">Create &amp; Continue</button>
+    </div>
+
+    <!-- Step: Confirm identity -->
+    <div id="step-confirm" class="step">
+      <button class="back-link" onclick="goToStep('phone')">← Back</button>
+      <div id="confirm-photo-wrap"></div>
+      <div class="confirm-name" id="confirm-name"></div>
+      <div class="confirm-role" id="confirm-role"></div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:.5rem" onclick="confirmLogin()">
+        Yes, that's me — Continue
+      </button>
+      <button class="btn btn-outline" style="width:100%" onclick="goToStep('phone')">
+        Not me — Try different number
+      </button>
+    </div>
+
+    <div id="login-error" class="alert alert-danger" style="display:none;margin-top:1rem"></div>
+    <div id="login-loading" class="loading" style="display:none;padding:1rem 0">
+      <div class="spinner"></div> Please wait…
+    </div>
+  </div>
+</div>
+
+<script>
+const { db } = initFirebase();
+let _pendingSession = null;
+let _selectedRole   = null;
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = '';
+}
+function clearError() { document.getElementById('login-error').style.display = 'none'; }
+function setLoading(v) { document.getElementById('login-loading').style.display = v ? '' : 'none'; }
+
+function goToStep(step) {
+  clearError();
+  document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+  document.getElementById('step-' + step).classList.add('active');
+}
+
+function getDestination(role) {
+  if (role === 'student') return '/student/sign.html';
+  if (role === 'mentor')  return '/admin/mark-attendance.html';
+  return '/admin/dashboard.html';
+}
+
+function goToApp() {
+  const s = JSON.parse(localStorage.getItem('_session') || 'null');
+  if (s) window.location.href = getDestination(s.role);
+}
+
+function switchAccount() {
+  localStorage.removeItem('_session');
+  goToStep('role');
+}
+
+/* ─── Role Selection ──────────────────────────────────────────────────────── */
+function selectRole(role) {
+  _selectedRole = role;
+  if (role === 'admin') {
+    goToStep('admin-google');
+  } else {
+    const labels = { mentor: 'Instructor Login', student: 'Student Login' };
+    document.getElementById('phone-role-label').textContent = labels[role] || 'Login';
+    document.getElementById('phone-input').value = '';
+    goToStep('phone');
+  }
+}
+
+/* ─── Admin Google Sign-In ────────────────────────────────────────────────── */
+async function signInWithGoogle() {
+  clearError();
+  const btn = document.getElementById('google-signin-btn');
+  btn.disabled = true;
+  setLoading(true);
+
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    provider.setCustomParameters({ login_hint: ADMIN_EMAIL });
+
+    const result = await firebase.auth().signInWithPopup(provider);
+    const email  = (result.user.email || '').toLowerCase();
+
+    if (email !== ADMIN_EMAIL.toLowerCase()) {
+      await firebase.auth().signOut();
+      showError(`Access denied. Sign in with ${ADMIN_EMAIL}.`);
+      return;
+    }
+
+    if (result.credential && result.credential.accessToken) {
+      setDriveToken(result.credential.accessToken);
+    }
+
+    await firebase.auth().signOut();
+    const session = { role: 'admin', name: result.user.displayName || 'Admin', phone: 'admin' };
+    localStorage.setItem('_session', JSON.stringify(session));
+    window.location.href = '/admin/dashboard.html';
+
+  } catch(e) {
+    if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+      showError('Sign-in cancelled.');
+    } else {
+      showError(e.message || 'Google Sign-in failed. Try again.');
+    }
+  } finally {
+    btn.disabled = false;
+    setLoading(false);
+  }
+}
+
+/* ─── Phone Flow (Student / Instructor) ──────────────────────────────────── */
+async function lookupPhone() {
+  clearError();
+  const raw = document.getElementById('phone-input').value.trim();
+  if (!raw) { showError('Enter your mobile number.'); return; }
+  if (!/^\d{10}$/.test(raw)) { showError('Enter a valid 10-digit mobile number.'); return; }
+  const phone = normalizePhone(raw);
+
+  const btn = document.getElementById('lookup-btn');
+  btn.disabled = true; btn.textContent = 'Looking up…';
+  setLoading(true);
+
+  try {
+    const userSnap = await db.collection('users').doc(phone).get();
+    if (!userSnap.exists) {
+      if (_selectedRole === 'student') {
+        const stuRef = db.collection('students').doc();
+        await stuRef.set({
+          name:'', phone, address:'', status:'active', enrollmentNumber:'',
+          enrollmentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+          photoURL:'', photoFileId:'', totalFee:0, paidFee:0, balance:0,
+          referredBy:null, referralApplied:false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await db.collection('users').doc(phone).set({
+          name:'', phone, role:'student', studentId: stuRef.id,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        localStorage.setItem('_session', JSON.stringify({ phone, role:'student', name:'', studentId: stuRef.id }));
+        window.location.href = '/student/dashboard.html';
+        return;
+      }
+      await db.collection('users').doc(phone).set({
+        name:'', phone, role:'mentor', studentId:null, status:'active',
+        joiningDate: firebase.firestore.Timestamp.fromDate(new Date()),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      localStorage.setItem('_session', JSON.stringify({ phone, role:'mentor', name:'' }));
+      window.location.href = '/admin/mark-attendance.html';
+      return;
+    }
+
+    const user = userSnap.data();
+
+    // Role check: admin cannot log in via phone
+    if (user.role === 'admin') { showError('Admin must log in using the Admin option.'); return; }
+
+    // If role was pre-selected, enforce it
+    if (_selectedRole && user.role !== _selectedRole) {
+      showError(`This number is registered as a ${user.role}, not ${_selectedRole}. Please go back and select the correct role.`);
+      return;
+    }
+
+    _pendingSession = { phone: user.phone, role: user.role, name: user.name, studentId: user.studentId || null };
+
+    let photoHtml = '<div class="confirm-placeholder">👤</div>';
+    if (user.studentId) {
+      try {
+        const st = await db.collection('students').doc(user.studentId).get();
+        if (st.exists && st.data().photoURL) {
+          photoHtml = `<img src="${escapeHtml(st.data().photoURL)}" class="confirm-photo">`;
+        }
+      } catch { /* non-critical */ }
+    }
+
+    document.getElementById('confirm-photo-wrap').innerHTML = photoHtml;
+    document.getElementById('confirm-name').textContent = user.name;
+    document.getElementById('confirm-role').textContent = user.role === 'mentor' ? 'Instructor' : 'Student';
+    goToStep('confirm');
+  } catch(e) {
+    showError(e.message || 'Something went wrong. Try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Continue';
+    setLoading(false);
+  }
+}
+
+function confirmLogin() {
+  if (!_pendingSession) return;
+  localStorage.setItem('_session', JSON.stringify(_pendingSession));
+  window.location.href = getDestination(_pendingSession.role);
+}
+
+/* ─── Create Profile (new student / instructor) ───────────────────────────── */
+async function createProfile() {
+  clearError();
+  const name    = document.getElementById('create-name').value.trim();
+  const address = document.getElementById('create-address').value.trim();
+  const dob     = document.getElementById('create-dob').value;
+  const role    = _selectedRole;
+
+  if (!name)    { showError('Full name is required.'); return; }
+  if (!address) { showError('Address is required.'); return; }
+  if (role === 'student' && !dob) { showError('Date of birth is required.'); return; }
+
+  const phone = normalizePhone(document.getElementById('phone-input').value.trim());
+
+  const btn = document.getElementById('create-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  setLoading(true);
+
+  try {
+    let studentId = null;
+
+    if (role === 'student') {
+      const stuRef = db.collection('students').doc();
+      studentId = stuRef.id;
+      await stuRef.set({
+        name, phone, address,
+        dob: dob ? firebase.firestore.Timestamp.fromDate(new Date(dob)) : null,
+        status: 'active',
+        enrollmentNumber: '', enrollmentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+        photoURL: '', photoFileId: '',
+        totalFee: 0, paidFee: 0, balance: 0,
+        referredBy: null, referralApplied: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    await db.collection('users').doc(phone).set({
+      name, phone, role,
+      ...(role === 'mentor' ? { status: 'active', studentId: null, joiningDate: firebase.firestore.Timestamp.fromDate(new Date()) } : {}),
+      ...(studentId ? { studentId } : {}),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    const session = { phone, role, name, studentId };
+    localStorage.setItem('_session', JSON.stringify(session));
+    window.location.href = getDestination(role);
+
+  } catch(e) {
+    showError(e.message || 'Could not create profile. Try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Profile';
+    setLoading(false);
+  }
+}
+
+/* ─── Referral link handling ──────────────────────────────────────────────── */
+(async function() {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref) {
+      const referrer = await logReferralVisit(ref);
+      if (referrer) {
+        const banner = document.getElementById('referral-banner');
+        banner.innerHTML = `🎉 You were invited by <strong>${escapeHtml(referrer.name)}</strong>! Enroll and get <strong>₹200 off</strong> your course fee.`;
+        banner.style.display = '';
+      }
+    }
+  } catch { /* non-critical */ }
+})();
+
+/* ─── Startup ─────────────────────────────────────────────────────────────── */
+(function() {
+  try {
+    const s = JSON.parse(localStorage.getItem('_session') || 'null');
+    if (s && s.role && s.name) {
+      const roleLabel = { admin: 'Administrator', mentor: 'Instructor', student: 'Student' };
+      document.getElementById('welcome-name').textContent = s.name;
+      document.getElementById('welcome-role').textContent = roleLabel[s.role] || s.role;
+      goToStep('welcome');
+      return;
+    }
+  } catch { /* ignore */ }
+  goToStep('role');
+})();
+</script>
+</body>
+</html>

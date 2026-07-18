@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "ankushedrivingschool"
-  }
+    "default": "sarathi-driving-school"
+  },
+  "targets": {},
+  "etags": {}
 }

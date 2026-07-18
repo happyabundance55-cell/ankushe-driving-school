@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create your school — Sarathi</title>
+  <link rel="stylesheet" href="/shared/css/main.css">
+  <script src="/shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="/shared/js/utils.js"></script>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card" style="max-width:440px">
+    <div class="login-logo">
+      <h1>Set up your school on Sarathi</h1>
+    </div>
+
+    <div id="step-google" class="step active">
+      <p style="margin-bottom:1rem">Sign in with the Google account you want as your school's admin login.</p>
+      <button class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:.7rem" onclick="handleGoogleSignIn()" id="google-signin-btn">
+        <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0"><path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-21 0-1.3-.2-2.7-.5-4z"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+
+    <div id="step-details" class="step" style="display:none">
+      <div class="form-group">
+        <label>School Name</label>
+        <input type="text" id="school-name" placeholder="e.g. Ankushe Driving School" maxlength="80" oninput="suggestSlug()">
+      </div>
+      <div class="form-group">
+        <label>School ID</label>
+        <input type="text" id="school-slug" placeholder="ankushe" maxlength="40">
+        <p style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem">Used in your school's login link — lowercase letters, numbers, hyphens only.</p>
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:.5rem" onclick="createSchool()" id="create-btn">Create school</button>
+      <p style="font-size:.72rem;color:var(--text-muted);margin-top:.6rem;text-align:center">You can add your address and other details later in Settings.</p>
+    </div>
+
+    <div id="signup-error" class="alert alert-danger" style="display:none;margin-top:1rem"></div>
+    <div id="signup-loading" class="loading" style="display:none;padding:1rem 0">
+      <div class="spinner"></div> Please wait…
+    </div>
+  </div>
+</div>
+
+<script>
+function initFirebase() {
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  return { db: firebase.firestore() };
+}
+
+function showError(msg) {
+  const el = document.getElementById('signup-error');
+  el.textContent = msg; el.style.display = '';
+}
+function clearError() { document.getElementById('signup-error').style.display = 'none'; }
+function setLoading(v) { document.getElementById('signup-loading').style.display = v ? '' : 'none'; }
+function showStep(id) {
+  document.getElementById('step-google').style.display  = id === 'google'  ? '' : 'none';
+  document.getElementById('step-details').style.display = id === 'details' ? '' : 'none';
+}
+
+function suggestSlug() {
+  const slugEl = document.getElementById('school-slug');
+  if (slugEl.dataset.touched) return;
+  const name = document.getElementById('school-name').value;
+  slugEl.value = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('school-slug').addEventListener('input', e => { e.target.dataset.touched = '1'; });
+});
+
+async function handleGoogleSignIn() {
+  clearError();
+  const btn = document.getElementById('google-signin-btn');
+  btn.disabled = true; setLoading(true);
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const result = await firebase.auth().signInWithPopup(provider);
+
+    const db = firebase.firestore();
+    const existing = await db.collection('users').doc(result.user.uid).get();
+    if (existing.exists) {
+      showError('This Google account is already linked to a school. Use the login page instead.');
+      await firebase.auth().signOut();
+      return;
+    }
+    showStep('details');
+  } catch (e) {
+    if (e.code === 'auth/popup-closed-by-user') {
+      showError('Sign-in cancelled.');
+    } else {
+      showError(e.message || 'Google sign-in failed. Try again.');
+    }
+  } finally {
+    btn.disabled = false; setLoading(false);
+  }
+}
+
+async function createSchool() {
+  clearError();
+  const name = document.getElementById('school-name').value.trim();
+  const slug = document.getElementById('school-slug').value.trim().toLowerCase();
+
+  if (!name) { showError('School name is required.'); return; }
+  if (!/^[a-z0-9-]{3,40}$/.test(slug)) { showError('Web address must be 3-40 characters: lowercase letters, numbers, hyphens.'); return; }
+
+  const btn = document.getElementById('create-btn');
+  btn.disabled = true; btn.textContent = 'Creating…'; setLoading(true);
+  try {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    if (!user) { showError('Session expired. Sign in again.'); showStep('google'); return; }
+
+    const slugSnap = await db.collection('tenantSlugs').doc(slug).get();
+    if (slugSnap.exists) { showError('That web address is already taken. Try another.'); return; }
+
+    const tenantId = slug;
+    const batch = db.batch();
+    batch.set(db.collection('tenants').doc(tenantId), {
+      ownerUid: user.uid, name, address: '',
+      enrollmentPrefix: 'DS', referralDiscountPaise: 20000, referralRewardPaise: 20000,
+      sessionMins: 120, govtRecognised: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    batch.set(db.collection('tenantSlugs').doc(slug), { tenantId });
+    batch.set(db.collection('users').doc(user.uid), {
+      tenantId, role: 'admin', name: user.displayName || 'Admin',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+
+    window.location.href = `/admin/dashboard.html?t=${slug}`;
+  } catch (e) {
+    showError(e.message || 'Could not create your school. Try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create school'; setLoading(false);
+  }
+}
+
+(function() { initFirebase(); })();
+</script>
+</body>
+</html>

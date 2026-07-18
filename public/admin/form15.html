@@ -2,12 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as every other page's
+    // toggle, so a preference set anywhere carries over everywhere.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Form 15 — Ankushe Driving School</title>
+  <title>Form 15 — Sarathi</title>
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/db.js"></script>
   <script src="../shared/js/utils.js"></script>
@@ -102,7 +113,7 @@ function fmtDateOnly(ts) {
 }
 
 (async function() {
-  initFirebase();
+  await bootstrapPage(['admin', 'mentor']);
   const [student, attendance] = await Promise.all([
     getStudent(studentId),
     getStudentAttendance(studentId)
@@ -126,7 +137,7 @@ function renderForm15(s, attendance) {
     return toMs(a.date) - toMs(b.date);
   });
 
-  const SESSION_MINS = 120;
+  const SESSION_MINS = getTenant().sessionMins || 120;
   const totalSessions = sortedAtt.length;
   const totalMinutes  = totalSessions * SESSION_MINS;
   const totalHours    = Math.floor(totalMinutes / 60);
@@ -154,9 +165,9 @@ function renderForm15(s, attendance) {
       <div class="f15-title">FORM 15</div>
       <div class="f15-rule">Under rule 27(i)</div>
       <div class="f15-reg">Register showing the driving hours spent by a trainee</div>
-      <div class="f15-school">${escapeHtml(APP_NAME.toUpperCase())}</div>
-      <div class="f15-govt">(GOVT.RECOGNISED)</div>
-      <div class="f15-addr">${escapeHtml(SCHOOL_ADDRESS)}</div>
+      <div class="f15-school">${escapeHtml((getTenant().name || '').toUpperCase())}</div>
+      ${getTenant().govtRecognised ? '<div class="f15-govt">(GOVT.RECOGNISED)</div>' : ''}
+      <div class="f15-addr">${escapeHtml(getTenant().address || '')}</div>
     </div>
 
     <div class="info-line">

@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as every other page's
+    // toggle, so a preference set anywhere carries over everywhere.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Masters — Ankushe Driving School</title>
+  <title>Masters — Sarathi</title>
   <link rel="stylesheet" href="../shared/css/main.css">
   <style>
     .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
@@ -38,6 +47,8 @@
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/db.js"></script>
   <script src="../shared/js/utils.js"></script>
@@ -45,7 +56,7 @@
 <body>
 
 <nav class="navbar">
-  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Sarathi" onerror="this.style.display='none'"> Sarathi</a>
   <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
   <div class="nav-overlay" onclick="closeNav()"></div>
   <ul class="navbar-links">
@@ -58,6 +69,12 @@
     <li><a href="referrals.html">Referrals</a></li>
     <li><a href="masters.html" class="active">Masters</a></li>
     <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+    <li>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </li>
   </ul>
 </nav>
 
@@ -76,6 +93,9 @@
       </div>
       <div class="master-nav-item" onclick="showMaster('tv')" id="nav-tv">
         <span class="nav-icon">🚙</span> Training Vehicles
+      </div>
+      <div class="master-nav-item" onclick="showMaster('settings')" id="nav-settings">
+        <span class="nav-icon">⚙️</span> School Settings
       </div>
     </div>
 
@@ -152,24 +172,69 @@
         </div>
       </div>
 
+      <!-- ─── School Settings ──────────────────────────────────────────────── -->
+      <div id="panel-settings" class="master-panel">
+        <div class="card">
+          <div class="card-title">School Settings</div>
+          <p style="font-size:.82rem;color:#7a5018;margin-bottom:.85rem">
+            These details appear on receipts, government forms, and this school's login page.
+          </p>
+          <div class="form-group">
+            <label>School Name</label>
+            <input type="text" id="set-name" maxlength="80">
+          </div>
+          <div class="form-group">
+            <label>Address (used on Form 15 letterhead)</label>
+            <input type="text" id="set-address" maxlength="200">
+          </div>
+          <div class="form-group">
+            <label>Enrollment Number Prefix</label>
+            <input type="text" id="set-prefix" maxlength="6" style="text-transform:uppercase;max-width:140px">
+          </div>
+          <div class="form-row" style="gap:.75rem">
+            <div class="form-group" style="flex:1">
+              <label>Referral Discount (₹)</label>
+              <input type="number" id="set-discount" min="0" step="1">
+            </div>
+            <div class="form-group" style="flex:1">
+              <label>Referral Reward (₹)</label>
+              <input type="number" id="set-reward" min="0" step="1">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Session Length (minutes, used on Form 15)</label>
+            <input type="number" id="set-session-mins" min="1" style="max-width:140px">
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:.5rem;text-transform:none;letter-spacing:0;font-size:.9rem">
+              <input type="checkbox" id="set-govt-recognised" style="width:auto">
+              Show "(GOVT. RECOGNISED)" on Form 15
+            </label>
+          </div>
+          <div id="settings-error" class="alert alert-danger" style="display:none;margin-bottom:.6rem"></div>
+          <button class="btn btn-primary btn-sm" onclick="saveSettings()" style="padding:.58rem 1.2rem">Save Settings</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
 
 <script>
-requireAuth(['admin']).then(() => { loadVC(); });
+bootstrapPage(['admin']).then(() => { loadVC(); });
 
 function showMaster(key) {
-  ['vc','dla','tv'].forEach(k => {
+  ['vc','dla','tv','settings'].forEach(k => {
     document.getElementById('panel-' + k).classList.toggle('active', k === key);
     document.getElementById('nav-' + k).classList.toggle('active', k === key);
   });
-  if (key === 'vc'  && !_loaded.vc)  { loadVC();  }
-  if (key === 'dla' && !_loaded.dla) { loadDLA(); }
-  if (key === 'tv'  && !_loaded.tv)  { loadTV();  }
+  if (key === 'vc'       && !_loaded.vc)       { loadVC(); }
+  if (key === 'dla'      && !_loaded.dla)      { loadDLA(); }
+  if (key === 'tv'       && !_loaded.tv)       { loadTV(); }
+  if (key === 'settings' && !_loaded.settings) { loadSettings(); }
 }
 
-const _loaded = { vc: false, dla: false, tv: false };
+const _loaded = { vc: false, dla: false, tv: false, settings: false };
 
 function emptyMsg(msg) { return `<div style="font-size:.85rem;color:var(--text-muted);padding:.5rem 0">${msg}</div>`; }
 
@@ -270,6 +335,43 @@ async function delTV(id, name) {
   if (!confirm(`Delete vehicle "${name}"?`)) return;
   try { await deleteTrainingVehicle(id); showToast(`${name} deleted.`, 'success'); loadTV(); }
   catch(e) { showToast(e.message, 'danger'); }
+}
+
+/* ─── School Settings ───────────────────────────────────────────────────── */
+async function loadSettings() {
+  _loaded.settings = true;
+  const t = await getTenantSettings();
+  document.getElementById('set-name').value            = t.name || '';
+  document.getElementById('set-address').value          = t.address || '';
+  document.getElementById('set-prefix').value            = t.enrollmentPrefix || 'DS';
+  document.getElementById('set-discount').value           = (t.referralDiscountPaise || 0) / 100;
+  document.getElementById('set-reward').value              = (t.referralRewardPaise || 0) / 100;
+  document.getElementById('set-session-mins').value        = t.sessionMins || 120;
+  document.getElementById('set-govt-recognised').checked    = !!t.govtRecognised;
+}
+
+async function saveSettings() {
+  const errEl = document.getElementById('settings-error');
+  errEl.style.display = 'none';
+  const name = document.getElementById('set-name').value.trim();
+  const prefix = document.getElementById('set-prefix').value.trim().toUpperCase();
+  if (!name)   { errEl.textContent = 'School name is required.'; errEl.style.display = ''; return; }
+  if (!prefix) { errEl.textContent = 'Enrollment prefix is required.'; errEl.style.display = ''; return; }
+  const fields = {
+    name,
+    address: document.getElementById('set-address').value.trim(),
+    enrollmentPrefix: prefix,
+    referralDiscountPaise: Math.round((parseFloat(document.getElementById('set-discount').value) || 0) * 100),
+    referralRewardPaise: Math.round((parseFloat(document.getElementById('set-reward').value) || 0) * 100),
+    sessionMins: parseInt(document.getElementById('set-session-mins').value, 10) || 120,
+    govtRecognised: document.getElementById('set-govt-recognised').checked
+  };
+  try {
+    await updateTenantSettings(fields);
+    updateTenantCache(fields);
+    showToast('Settings saved.', 'success');
+    applyBranding(getTenant());
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = ''; }
 }
 </script>
 </body>

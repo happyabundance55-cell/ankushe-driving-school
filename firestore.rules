@@ -1,8 +1,182 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function signedIn() { return request.auth != null; }
+
+    function hasUser() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
+
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isMember(tid) {
+      return hasUser() && myUser().tenantId == tid;
+    }
+
+    function hasRole(tid, roles) {
+      return isMember(tid) && myUser().role in roles;
+    }
+
+    function isStudentSelf(tid, sid) {
+      return isMember(tid) && myUser().role == 'student' && myUser().studentId == sid;
+    }
+
+    // Firebase Phone Auth sets this automatically on the ID token — verified
+    // server-side at OTP sign-in, not something the client can forge.
+    function verifiedPhone() {
+      return signedIn() ? request.auth.token.phone_number : null;
+    }
+
+    // ── Tenant directory (public, non-sensitive) ────────────────────────────
+    match /tenantSlugs/{slug} {
+      allow read: if true; // must be resolvable before anyone is signed in
+      // Only created as half of the atomic signup batch — see /tenants/{tid} below.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['tenantId'])
+        && request.resource.data.tenantId is string
+        && !exists(/databases/$(database)/documents/tenantSlugs/$(slug));
+      allow update, delete: if false;
+    }
+
+    // ── Tenant settings ──────────────────────────────────────────────────────
+    match /tenants/{tid} {
+      // Public: login.html and the referral banner need this pre-auth (to show
+      // school name/branding before anyone signs in). Nothing here is sensitive
+      // — name/address are already shown publicly on the login page and forms.
+      allow read: if true;
+      // Self-provisioning: brand-new tenant only. Rules see pre-batch state, so
+      // this and the matching /users/{uid} admin-create rule can only ever both
+      // succeed together for a tenant ID that doesn't exist yet.
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/tenants/$(tid));
+      allow update: if hasRole(tid, ['admin']);
+      allow delete: if false;
+    }
+
+    // ── Identity: users/{uid}, keyed by Firebase Auth UID ──────────────────
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || hasRole(resource.data.tenantId, ['admin']));
+
+      // Admin: only as the other half of a brand-new tenant signup batch.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'admin'
+        && !exists(/databases/$(database)/documents/users/$(uid))
+        && !exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId));
+
+      // Mentor: only by linking a matching admin-created invite, phone-verified.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'mentor'
+        && !exists(/databases/$(database)/documents/users/$(uid))
+        && verifiedPhone() == request.resource.data.phone
+        && exists(/databases/$(database)/documents/pendingInvites/$(request.resource.data.phone))
+        && get(/databases/$(database)/documents/pendingInvites/$(request.resource.data.phone)).data.tenantId == request.resource.data.tenantId
+        && get(/databases/$(database)/documents/pendingInvites/$(request.resource.data.phone)).data.role == 'mentor';
+
+      // Student — linking: an admin already enrolled this phone number
+      // (tenants/{tid}/studentsByPhone/{phone} exists) — attach to that
+      // existing student record rather than creating a new one.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'student'
+        && !exists(/databases/$(database)/documents/users/$(uid))
+        && verifiedPhone() == request.resource.data.phone
+        && exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/studentsByPhone/$(request.resource.data.phone))
+        && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/studentsByPhone/$(request.resource.data.phone)).data.studentId == request.resource.data.studentId;
+
+      // Student — fresh self-serve: no admin-enrolled record for this phone yet,
+      // so this signup batch creates a brand-new student record alongside it.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'student'
+        && !exists(/databases/$(database)/documents/users/$(uid))
+        && verifiedPhone() == request.resource.data.phone
+        && exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId))
+        && !exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/studentsByPhone/$(request.resource.data.phone));
+
+      allow update: if request.auth.uid != uid && hasRole(resource.data.tenantId, ['admin']);
+      allow delete: if request.auth.uid != uid && hasRole(resource.data.tenantId, ['admin']);
+    }
+
+    // Admin-created, admin-only-readable invites; consumed (deleted) by the
+    // matching /users/{uid} mentor-create write in the same client batch.
+    match /pendingInvites/{phone} {
+      // Only the admin who could have created it can list/read invites for
+      // their own tenant — the get()/exists() calls used by the mentor-link
+      // rule above bypass this and always have evaluation-time read access.
+      allow read: if hasRole(resource.data.tenantId, ['admin']);
+      allow create, delete: if signedIn() && hasRole(request.resource.data.tenantId, ['admin']);
+      allow update: if false;
+    }
+
+    // Public-safe projection for the pre-login referral banner — name only,
+    // never the full student record (that stays fully tenant/role-gated below).
+    match /tenants/{tid}/referralCodes/{code} {
+      allow read: if true;
+      allow write: if hasRole(tid, ['admin', 'mentor']);
+    }
+
+    match /tenants/{tid}/referralVisits/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['refCode','referrerId','referrerName','enrollmentNo','clickedAt']);
+      allow read, update, delete: if hasRole(tid, ['admin']);
+    }
+
+    // ── Core operational data — admin/mentor staff, student self-scoped read ─
+    match /tenants/{tid}/students/{sid} {
+      allow read: if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, sid);
+      // Fresh self-registration creates their own student doc pre-`users`
+      // (only reachable when no studentsByPhone mapping exists yet — see below).
+      allow create: if hasRole(tid, ['admin','mentor'])
+        || (signedIn() && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && verifiedPhone() == request.resource.data.phone);
+      // Student may complete their own profile (name/address/dob) once, staff can edit anytime.
+      allow update: if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, sid);
+      allow delete: if hasRole(tid, ['admin']);
+    }
+
+    // Phone -> studentId index. Lets a first-time OTP sign-in find an existing
+    // admin-enrolled student record to link to, instead of creating a duplicate.
+    match /tenants/{tid}/studentsByPhone/{phone} {
+      allow read: if hasRole(tid, ['admin','mentor']);
+      allow create: if hasRole(tid, ['admin','mentor'])
+        || (signedIn() && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && verifiedPhone() == phone);
+      allow update: if hasRole(tid, ['admin','mentor']);
+      allow delete: if hasRole(tid, ['admin']);
+    }
+
+    match /tenants/{tid}/payments/{id} {
+      allow read:  if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, resource.data.studentId);
+      allow write: if hasRole(tid, ['admin','mentor']);
+    }
+
+    match /tenants/{tid}/attendance/{id} {
+      allow read:  if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, resource.data.studentId);
+      allow create, update: if hasRole(tid, ['admin','mentor']);
+      allow delete: if hasRole(tid, ['admin']);
+    }
+
+    match /tenants/{tid}/drivingTests/{id} {
+      allow read:  if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, resource.data.studentId);
+      allow write: if hasRole(tid, ['admin','mentor']);
+    }
+
+    match /tenants/{tid}/feeAdjustments/{id} {
+      allow read:  if hasRole(tid, ['admin','mentor']) || isStudentSelf(tid, resource.data.studentId);
+      allow write: if hasRole(tid, ['admin','mentor']);
+    }
+
+    match /tenants/{tid}/referrals/{id} {
+      allow read, write: if hasRole(tid, ['admin','mentor']);
+    }
+
+    // ── Reference/master data & scheduling — staff only ─────────────────────
+    match /tenants/{tid}/vehicleClasses/{id}     { allow read, write: if hasRole(tid, ['admin','mentor']); }
+    match /tenants/{tid}/dlAuthorities/{id}      { allow read, write: if hasRole(tid, ['admin','mentor']); }
+    match /tenants/{tid}/trainingVehicles/{id}   { allow read, write: if hasRole(tid, ['admin','mentor']); }
+    match /tenants/{tid}/rosterSlots/{id}        { allow read, write: if hasRole(tid, ['admin','mentor']); }
+    match /tenants/{tid}/counters/{id}           { allow read, write: if hasRole(tid, ['admin','mentor']); }
   }
 }

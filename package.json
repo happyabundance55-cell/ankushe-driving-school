@@ -1,0 +1,9 @@
+{
+  "name": "sarathi-rules-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dev-only tooling for testing Firestore security rules against the emulator. Not part of the shipped frontend (which stays plain HTML/JS, no build step).",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4"
+  }
+}

@@ -13,6 +13,21 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNav(); 
 // Close nav on resize to desktop
 window.addEventListener('resize', () => { if (window.innerWidth > 768) closeNav(); });
 
+// Navbar is position:sticky in main.css, so it stays pinned to the top and
+// visible at all times — no auto-hide-on-scroll (tried that, wasn't wanted).
+
+// ─── Theme toggle (dark/light) ─────────────────────────────────────────────
+// Shared across every page. The pre-paint "which theme starts active" check
+// still has to be an inline <script> in each page's own <head> (it must run
+// before the stylesheet paints anything, before this shared script is even
+// fetched) — this just handles the actual click-to-toggle afterwards.
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('sarathi-theme', next);
+  window.dispatchEvent(new CustomEvent('sarathi-theme-change', { detail: next }));
+}
+
 // ─── Phone ────────────────────────────────────────────────────────────────────
 
 // Normalise to E.164 (+91XXXXXXXXXX for Indian numbers)
@@ -194,6 +209,44 @@ function printElement(elementId, title) {
   win.document.close();
   win.focus();
   setTimeout(() => { win.print(); win.close(); }, 500);
+}
+
+// ─── Branding ─────────────────────────────────────────────────────────────────
+// Replaces this page's title/navbar brand text with the current tenant's
+// school name. Call after the tenant is resolved (see tenant.js/auth.js's
+// bootstrapPage()). Expects the existing markup pattern used across all
+// pages: <title>Page — School Name</title> and
+// <a class="navbar-brand"><img alt="..."> School Name</a>.
+
+function applyBranding(tenant) {
+  const name = (tenant && tenant.name) || 'Sarathi';
+
+  const titleParts = document.title.split('—');
+  document.title = titleParts.length > 1 ? `${titleParts[0].trim()} — ${name}` : name;
+
+  const brand = document.querySelector('.navbar-brand');
+  if (brand) {
+    const img = brand.querySelector('img');
+    if (img) img.alt = name;
+    const textNode = Array.from(brand.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+    if (textNode) textNode.textContent = ' ' + name;
+    else brand.appendChild(document.createTextNode(' ' + name));
+  }
+}
+
+// Appends the current tenant's ?t= param to same-page relative links (nav
+// bars, etc.) so navigating between pages doesn't lose which school you're
+// in. Doesn't touch external links, #anchors, mailto:/tel:, or links that
+// already carry a query string (those are built explicitly per-page via
+// tenantUrl() instead — see e.g. students.html linking to a specific profile).
+function preserveTenantLinks(tenant) {
+  const slug = tenant && tenant.slug;
+  if (!slug) return;
+  document.querySelectorAll('a[href]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (!href || /^(https?:|#|mailto:|tel:)/.test(href) || href.includes('?')) return;
+    a.setAttribute('href', `${href}?t=${encodeURIComponent(slug)}`);
+  });
 }
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────

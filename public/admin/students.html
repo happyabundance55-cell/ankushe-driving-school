@@ -2,24 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as every other page's
+    // toggle, so a preference set anywhere carries over everywhere.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Students — Ankushe Driving School</title>
+  <title>Students — Sarathi</title>
   <link rel="stylesheet" href="../shared/css/main.css">
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/db.js"></script>
   <script src="../shared/js/utils.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
   <style>
-    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; box-shadow:none; }
+    .ts-wrapper.single .ts-control { border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:.9rem; font-family:inherit; padding:.58rem .85rem; background:var(--white); color:var(--text); box-shadow:none; cursor:pointer; }
     .ts-wrapper.single.focus .ts-control { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
-    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); font-size:.9rem; font-family:inherit; }
+    .ts-wrapper.single.input-active .ts-control { border-color:var(--primary); }
+    .ts-dropdown { border:1.5px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-lg); font-size:.9rem; font-family:inherit; background:var(--white); color:var(--text); margin-top:4px; overflow:hidden; }
+    .ts-dropdown .option { padding:.6rem 1rem; cursor:pointer; }
     .ts-dropdown .option.active { background:var(--primary-light); color:var(--primary); }
-    .ts-dropdown .option:hover  { background:var(--bg-hover); }
+    .ts-dropdown .option:hover  { background:var(--bg-hover); color:var(--text); }
+    .ts-dropdown .option.selected { background:var(--primary-light); color:var(--primary); font-weight:600; }
+    .ts-dropdown input.ts-search { border:none; border-bottom:1.5px solid var(--border); border-radius:0; padding:.55rem 1rem; font-size:.875rem; font-family:inherit; background:var(--bg); color:var(--text); width:100%; outline:none; }
+    .ts-dropdown .no-results { padding:.75rem 1rem; color:var(--text-muted); font-size:.875rem; }
+    .ts-wrapper .clear-button { color:var(--text-muted); }
   </style>
   <style>
     .nav-logo-img {
@@ -30,12 +47,26 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.18);
       border: 1.5px solid rgba(255,255,255,.22);
     }
+    /* Single shared dropdown for the row actions menu, positioned via JS at
+       whichever row's "more" button was clicked. Lives outside the scrollable
+       table (position:fixed) so it never gets clipped by .table-wrap's own
+       overflow:auto — a per-row dropdown nested inside the table would be. */
+    #row-actions-menu {
+      display: none; position: fixed; z-index: 300;
+      background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow-md); min-width: 170px; overflow: hidden;
+    }
+    #row-actions-menu a {
+      display: block; padding: .6rem .95rem; font-size: .85rem; color: var(--text); text-decoration: none;
+    }
+    #row-actions-menu a:hover { background: var(--bg-hover); }
+    .actions-toggle { font-weight: 800; letter-spacing: 1px; line-height: 1; padding: .32rem .6rem !important; }
   </style>
 </head>
 <body>
 
 <nav class="navbar">
-  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Sarathi" onerror="this.style.display='none'"> Sarathi</a>
   <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
   <div class="nav-overlay" onclick="closeNav()"></div>
   <ul class="navbar-links">
@@ -49,8 +80,16 @@
     <li><a href="roster.html">Roster</a></li>
     <li><a href="masters.html">Masters</a></li>
     <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+    <li>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </li>
   </ul>
 </nav>
+
+<div id="row-actions-menu"></div>
 
 <div class="page-container">
   <div class="page-title">
@@ -109,7 +148,31 @@
 <script>
 let _allStudents = [];
 
-requireAuth(['admin']).then(async () => {
+function toggleRowActions(e, studentId) {
+  e.stopPropagation();
+  const menu = document.getElementById('row-actions-menu');
+  const wasOpenForThis = menu.dataset.studentId === studentId && menu.style.display === 'block';
+  if (wasOpenForThis) { menu.style.display = 'none'; return; }
+
+  menu.innerHTML = `
+    <a href="${tenantUrl('student-form.html', { id: studentId })}">Edit</a>
+    <a href="${tenantUrl('fees.html', { id: studentId })}">Fees</a>
+    <a href="${tenantUrl('attendance.html', { id: studentId })}">Attendance</a>
+    <a href="${tenantUrl('driving-tests.html', { student: studentId })}">Schedule Test</a>
+  `;
+  menu.dataset.studentId = studentId;
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  menu.style.display = 'block';
+  const menuWidth = menu.offsetWidth;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  menu.style.top = (spaceBelow > menu.offsetHeight + 8 ? rect.bottom + 4 : rect.top - menu.offsetHeight - 4) + 'px';
+  menu.style.left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8) + 'px';
+}
+document.addEventListener('click', () => { document.getElementById('row-actions-menu').style.display = 'none'; });
+document.addEventListener('scroll', () => { document.getElementById('row-actions-menu').style.display = 'none'; }, true);
+
+bootstrapPage(['admin']).then(async () => {
   new TomSelect('#status-filter', {
     allowEmptyOption: false, create: false,
     onChange: () => applyFilters(),
@@ -170,12 +233,9 @@ function renderTable(students) {
     </td>
     <td><span class="badge badge-${s.status === 'active' ? 'success' : 'muted'}">${s.status}</span></td>
     <td class="no-print">
-      <div style="display:flex;gap:.35rem;flex-wrap:wrap">
-        <a href="student-profile.html?id=${s.id}" class="btn btn-sm btn-outline">Profile</a>
-        <a href="student-form.html?id=${s.id}"    class="btn btn-sm btn-outline">Edit</a>
-        <a href="fees.html?id=${s.id}"            class="btn btn-sm btn-outline">Fees</a>
-        <a href="attendance.html?id=${s.id}"           class="btn btn-sm btn-outline">Attendance</a>
-        <a href="driving-tests.html?student=${s.id}" class="btn btn-sm btn-outline">Test</a>
+      <div style="display:flex;gap:.35rem">
+        <a href="${tenantUrl('student-profile.html', { id: s.id })}" class="btn btn-sm btn-outline">Profile</a>
+        <button type="button" class="btn btn-sm btn-outline actions-toggle" onclick="toggleRowActions(event,'${s.id}')" aria-label="More actions">⋯</button>
       </div>
     </td>
   </tr>`).join('');

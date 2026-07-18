@@ -2,11 +2,79 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as the landing page's
+    // toggle, so a preference set there carries over here automatically.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard — Ankushe Driving School</title>
+  <title>Dashboard — Sarathi</title>
   <link rel="stylesheet" href="../shared/css/main.css">
   <style>
+    /* Dark-mode tokens + glow treatment — piloting this on the Dashboard tab
+       only, same as the earlier light-mode bento redesign. main.css doesn't
+       define full dark tokens (only body background + table rows), so this
+       page defines its own complete set, scoped here by simply not existing
+       on any other page. */
+    :root[data-theme="dark"] {
+      --primary:       #e0a020;
+      --primary-dark:  #c47c05;
+      --primary-light: rgba(224,160,32,.14);
+      --primary-muted: #f4c560;
+      --text:          #f1e9db;
+      --text-muted:    #b9a483;
+      --text-subtle:   #8f7c5c;
+      --border:        rgba(255,255,255,.1);
+      --bg:            #14110c;
+      --bg-hover:      #1c1811;
+      --white:         #1a160f;
+      --card-bg:       #1a160f;
+    }
+    :root[data-theme="dark"] .card,
+    :root[data-theme="dark"] .metric-card {
+      background: rgba(255,255,255,.035) !important;
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border-color: rgba(255,255,255,.08) !important;
+    }
+    /* Glowing accent per card, colored to match its own dot indicator — tight
+       and even (0 0, no vertical offset) instead of a large offset blur,
+       which pooled into an uneven "glowing puddle" at the bottom of each
+       card and smeared into whatever sat below it. */
+    :root[data-theme="dark"] .metric-card { box-shadow: 0 0 0 1px rgba(255,255,255,.04), 0 0 22px -6px var(--dot, var(--primary)); }
+    :root[data-theme="dark"] .metric-card::before { box-shadow: 0 0 8px 1px var(--dot, var(--primary)); }
+    :root[data-theme="dark"] .metric-card:hover { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 0 28px -4px var(--dot, var(--primary)); }
+    :root[data-theme="dark"] .chart-wrap { box-shadow: 0 0 0 1px rgba(255,255,255,.04), 0 0 24px -6px var(--primary); }
+
+    /* The period-selector pills had a hardcoded light glass background —
+       fine on light mode, but combined with light-mode text turning light
+       in dark mode too, it became low-contrast/near-blank. */
+    :root[data-theme="dark"] #period-select,
+    :root[data-theme="dark"] #period-label {
+      background: rgba(255,255,255,.06) !important;
+      border-color: rgba(255,255,255,.15) !important;
+      color: var(--text) !important;
+    }
+    :root[data-theme="dark"] #custom-start,
+    :root[data-theme="dark"] #custom-end {
+      background: var(--card-bg) !important;
+      border-color: var(--border) !important;
+      color: var(--text) !important;
+    }
+
+    /* Piloting a cleaner, Linear/Framer-style treatment on this one tab only
+       — these rules live in this page's own <style> block, so nothing here
+       touches shared/css/main.css or any other page. */
+    .page-title {
+      font-size: 1.5rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -.025em !important;
+    }
+
     .section-title {
       font-size: .7rem;
       font-weight: 700;
@@ -24,37 +92,52 @@
       height: 1px;
       background: var(--border);
     }
+
+    .card {
+      border-radius: 14px !important;
+      border: 1px solid var(--border) !important;
+      box-shadow: 0 1px 2px rgba(15,23,42,.04) !important;
+      transition: box-shadow .2s ease, transform .2s ease;
+    }
+    .card:hover { box-shadow: 0 8px 24px rgba(15,23,42,.08) !important; }
+
     .metric-card {
-      background: rgba(255,255,255,.72);
-      border: 1px solid rgba(196,124,5,.22);
-      border-radius: var(--radius);
-      padding: 1rem 1.1rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.1rem 1.2rem;
       display: flex;
       flex-direction: column;
-      gap: .25rem;
-      box-shadow:
-        inset 0 1px 0 rgba(255,220,120,.55),
-        inset 1px 0 0 rgba(255,210,100,.3),
-        inset 0 -1px 0 rgba(100,55,5,.14),
-        inset -1px 0 0 rgba(100,55,5,.1),
-        0 2px 8px rgba(100,55,5,.08);
+      gap: .3rem;
+      box-shadow: 0 1px 2px rgba(15,23,42,.04);
+      transition: box-shadow .2s ease, transform .2s ease;
+      position: relative;
+    }
+    .metric-card:hover { box-shadow: 0 10px 26px rgba(15,23,42,.09); transform: translateY(-2px); }
+    .metric-card::before {
+      content: ''; position: absolute; top: 1.1rem; left: 1.2rem;
+      width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--primary));
     }
     .metric-card .m-label {
-      font-size: .75rem;
+      font-size: .72rem;
       color: var(--text-muted);
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .05em;
+      margin-left: 1rem;
     }
     .metric-card .m-value {
-      font-size: 1.55rem;
-      font-weight: 700;
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
       color: var(--text);
-      line-height: 1.15;
+      line-height: 1.1;
+      margin-left: 1rem;
     }
     .metric-card .m-prev {
       font-size: .78rem;
       color: var(--text-muted);
+      margin-left: 1rem;
     }
     .metric-card .m-change {
       font-size: 1rem;
@@ -64,28 +147,52 @@
     .m-change.up   { color: var(--success); }
     .m-change.down { color: var(--danger); }
     .m-change.flat { color: var(--text-muted); }
-    .fin-primary {
-      border-left: 4px solid var(--primary);
-    }
-    .fin-prev {
-      border-left: 4px solid var(--primary-muted);
-    }
-    .ops-enroll  { border-left: 4px solid var(--primary); }
-    .ops-instr   { border-left: 4px solid var(--primary-dark); }
-    .ops-att     { border-left: 4px solid #8a5a02; }
+    .fin-primary { --dot: var(--primary); }
+    .fin-prev    { --dot: var(--primary-muted); }
+    .ops-enroll  { --dot: var(--primary); }
+    .ops-instr   { --dot: var(--primary-dark); }
+    .ops-att     { --dot: #8a5a02; }
     .dash-tile   { min-height: 100px; display:flex; flex-direction:column; justify-content:center; }
+
+    /* Staggered fade-up entrance for the above-the-fold cards */
+    .fade-in { opacity: 0; transform: translateY(10px); animation: dashFadeIn .5s ease forwards; }
+    @keyframes dashFadeIn { to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Bento grid ───────────────────────────────────────────── */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: minmax(120px, auto);
+      gap: .85rem;
+      margin-bottom: 1.25rem;
+    }
+    .bento-cell { margin: 0 !important; }
+    .bento-chart      { grid-column: 1 / 3; grid-row: 1 / 3; display: flex; flex-direction: column; }
+    .bento-revenue    { grid-column: 3 / 4; grid-row: 1; }
+    .bento-outstanding{ grid-column: 4 / 5; grid-row: 1; }
+    .bento-students   { grid-column: 3 / 4; grid-row: 2; }
+    .bento-instructors{ grid-column: 4 / 5; grid-row: 2; }
+    .bento-attendance { grid-column: 1 / 5; grid-row: 3; }
+    @media (max-width: 900px) {
+      .bento-grid { grid-template-columns: repeat(2, 1fr); }
+      .bento-chart, .bento-attendance { grid-column: 1 / 3; grid-row: auto; }
+      .bento-revenue, .bento-outstanding, .bento-students, .bento-instructors { grid-column: span 1; grid-row: auto; }
+    }
+    @media (max-width: 560px) {
+      .bento-grid { grid-template-columns: 1fr; }
+      .bento-chart, .bento-revenue, .bento-outstanding, .bento-students, .bento-instructors, .bento-attendance { grid-column: 1; }
+    }
   </style>
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/db.js"></script>
   <script src="../shared/js/storage.js"></script>
-  <script src="../shared/js/drive.js"></script>
   <script src="../shared/js/utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     .chart-toggle { display:flex; border:1.5px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
     .chart-toggle-btn {
@@ -110,7 +217,7 @@
 <body>
 
 <nav class="navbar">
-  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Sarathi" onerror="this.style.display='none'"> Sarathi</a>
   <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
   <div class="nav-overlay" onclick="closeNav()"></div>
   <ul class="navbar-links">
@@ -124,6 +231,12 @@
     <li><a href="roster.html">Roster</a></li>
     <li><a href="masters.html">Masters</a></li>
     <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+    <li>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </li>
   </ul>
 </nav>
 
@@ -131,6 +244,19 @@
 
   <!-- ── Page title ───────────────────────────────────────────── -->
   <div class="page-title" style="margin-bottom:.6rem">Dashboard</div>
+
+  <!-- ── Invite students ──────────────────────────────────────── -->
+  <div class="card fade-in" style="display:flex;gap:1.25rem;align-items:center;flex-wrap:wrap;margin-bottom:1.25rem">
+    <img id="invite-qr" width="84" height="84" style="border-radius:var(--radius-sm);border:1px solid var(--border);flex-shrink:0" alt="QR code to student sign-up link">
+    <div style="flex:1;min-width:220px">
+      <div style="font-weight:700;font-size:.9rem;margin-bottom:.2rem">Invite students to sign up</div>
+      <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem">Share this link or QR code — new students can create their own login instantly.</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <input id="invite-link" readonly style="flex:1;min-width:200px;font-size:.8rem;padding:.4rem .6rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text-muted)">
+        <button class="btn btn-outline btn-sm" onclick="copyInviteLink()">Copy Link</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Period selector (below title) ────────────────────────── -->
   <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem">
@@ -149,40 +275,40 @@
     <span style="font-size:.75rem;color:var(--text);font-weight:500;background:rgba(255,255,255,.62);backdrop-filter:blur(8px);padding:.2rem .65rem;border-radius:var(--radius-pill);border:1px solid rgba(255,255,255,.55)" id="period-label"></span>
   </div>
 
-  <!-- ── Row 1: Financial tiles ───────────────────────────────── -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;margin-bottom:1rem">
-    <div class="metric-card fin-primary dash-tile">
-      <div class="m-label">Revenue</div>
-      <div class="m-value" id="fin-cur" style="margin-top:.2rem">—</div>
-      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem" id="fin-cur-count"></div>
-      <div style="font-size:.78rem;color:var(--text-subtle);margin-top:.4rem;line-height:1.5" id="fin-prev-line">—</div>
-    </div>
-    <div class="metric-card dash-tile" style="border-left:4px solid var(--danger)">
-      <div class="m-label">Outstanding</div>
-      <div class="m-value" id="stat-outstanding" style="color:var(--danger);margin-top:.2rem">—</div>
-      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem" id="stat-outstanding-count"></div>
-    </div>
-  </div>
+  <!-- ── Bento grid: one big chart cell + surrounding stat cells ── -->
+  <div class="bento-grid">
 
-  <!-- ── Row 2: Chart ───────────────────────────────────────────── -->
-  <div class="chart-wrap" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.1rem;flex-wrap:wrap">
-      <div class="chart-title" style="margin:0">Revenue Collections</div>
-      <div class="chart-toggle">
-        <button id="toggle-bar"  class="chart-toggle-btn active" onclick="setChartType('bar')">▐▐ Bar</button>
-        <button id="toggle-line" class="chart-toggle-btn"        onclick="setChartType('line')">∿ Line</button>
+    <!-- Chart — the big showcase cell -->
+    <div class="chart-wrap card fade-in bento-cell bento-chart" style="animation-delay:.05s">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.1rem;flex-wrap:wrap">
+        <div class="chart-title" style="margin:0">Revenue Collections</div>
+        <div class="chart-toggle">
+          <button id="toggle-bar"  class="chart-toggle-btn active" onclick="setChartType('bar')">▐▐ Bar</button>
+          <button id="toggle-line" class="chart-toggle-btn"        onclick="setChartType('line')">∿ Line</button>
+        </div>
+      </div>
+      <div style="position:relative;flex:1;min-height:180px">
+        <canvas id="revenue-chart"></canvas>
       </div>
     </div>
-    <div style="position:relative;height:230px">
-      <canvas id="revenue-chart"></canvas>
-    </div>
-  </div>
 
-  <!-- ── Row 3: Clubbed quant tiles ───────────────────────────── -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;margin-bottom:1.25rem;align-items:stretch">
+    <!-- Revenue -->
+    <div class="metric-card fin-primary dash-tile fade-in bento-cell bento-revenue" style="animation-delay:.1s">
+      <div class="m-label">Revenue</div>
+      <div class="m-value" id="fin-cur" style="margin-top:.2rem">—</div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem;margin-left:1rem" id="fin-cur-count"></div>
+      <div style="font-size:.78rem;color:var(--text-subtle);margin-top:.4rem;line-height:1.5;margin-left:1rem" id="fin-prev-line">—</div>
+    </div>
+
+    <!-- Outstanding -->
+    <div class="metric-card dash-tile fade-in bento-cell bento-outstanding" style="--dot:var(--danger);animation-delay:.15s">
+      <div class="m-label">Outstanding</div>
+      <div class="m-value" id="stat-outstanding" style="color:var(--danger);margin-top:.2rem">—</div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem;margin-left:1rem" id="stat-outstanding-count"></div>
+    </div>
 
     <!-- Students -->
-    <div class="metric-card ops-enroll dash-tile">
+    <div class="metric-card ops-enroll dash-tile fade-in bento-cell bento-students" style="animation-delay:.2s">
       <div class="m-label">Students</div>
       <div class="m-value" id="ov-active-students">—</div>
       <div class="m-prev" style="margin-top:.15rem">
@@ -196,7 +322,7 @@
     </div>
 
     <!-- Instructors -->
-    <div class="metric-card ops-instr dash-tile">
+    <div class="metric-card ops-instr dash-tile fade-in bento-cell bento-instructors" style="animation-delay:.25s">
       <div class="m-label">Instructors</div>
       <div class="m-value" id="ov-total-instructors">—</div>
       <div class="m-prev" style="margin-top:.15rem">
@@ -208,7 +334,7 @@
     </div>
 
     <!-- Attendance -->
-    <div class="metric-card ops-att dash-tile">
+    <div class="metric-card ops-att dash-tile fade-in bento-cell bento-attendance" style="animation-delay:.3s">
       <div class="m-label">Attendance Sessions</div>
       <div class="m-value" id="ops-att-cur">—</div>
       <div class="m-prev" id="ops-att-prev" style="margin-top:.15rem"></div>
@@ -229,39 +355,40 @@
     <div id="referral-pending-list"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
-  <!-- ── Photo archival ────────────────────────────────────────── -->
-  <div class="card" id="archive-card" style="display:none">
-    <div class="card-title">Photo Archival</div>
-    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:1rem">
-      Photos from students enrolled more than <strong>${PHOTO_ARCHIVE_MONTHS} months ago</strong>
-      are moved from Firebase Storage to Google Drive to save storage space.
-    </p>
-    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-outline" id="connect-drive-btn" onclick="connectDrive()">
-        Connect Google Drive
-      </button>
-      <button class="btn btn-warning" id="archive-btn" onclick="runArchive()" style="display:none">
-        Archive Old Photos
-      </button>
-    </div>
-    <div id="archive-status" style="margin-top:.75rem;font-size:.875rem"></div>
-  </div>
-
 </div>
 
 <script>
 let _allStudents = [], _allInstructors = [];
 
-requireAuth(['admin']).then(({ profile }) => {
-  if (profile.role === 'admin') {
-    document.getElementById('archive-card').style.display = '';
-    if (getDriveToken()) showArchiveButton();
-  }
+// toggleTheme() itself now lives in shared/js/utils.js — this page just
+// reacts to the change to re-render the chart with theme-correct colors.
+window.addEventListener('sarathi-theme-change', () => {
+  if (_lastChartArgs) renderChart(..._lastChartArgs);
+});
+
+bootstrapPage(['admin']).then(() => {
+  setupInviteLink();
   loadOverview();
   loadDashboard();
   loadOutstanding();
   loadPendingReferrals();
 });
+
+function setupInviteLink() {
+  const link = `${window.location.origin}/login.html?t=${encodeURIComponent(getTenant().slug)}`;
+  document.getElementById('invite-link').value = link;
+  document.getElementById('invite-qr').src =
+    `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(link)}`;
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('invite-link');
+  input.select();
+  navigator.clipboard?.writeText(input.value).then(
+    () => showToast('Link copied.', 'success'),
+    () => document.execCommand('copy')
+  );
+}
 
 // ── Overview ────────────────────────────────────────────────────────────────
 
@@ -552,8 +679,11 @@ function slotLabel(key, useMonths) {
     : new Date(key).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
 }
 
+function _isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+
 function renderChart(curPayments, prevPayments, current, previous) {
   _lastChartArgs = [curPayments, prevPayments, current, previous];
+  const dark = _isDark();
 
   const days      = Math.round((current.end - current.start) / 86400000) + 1;
   const useMonths = days > 60;
@@ -584,36 +714,43 @@ function renderChart(curPayments, prevPayments, current, previous) {
         {
           label: 'Previous Period',
           data: prevData,
-          backgroundColor: isLine ? 'rgba(148,163,184,.07)' : 'rgba(203,213,225,.75)',
-          borderColor: '#94a3b8',
+          backgroundColor: dark
+            ? (isLine ? 'rgba(143,124,92,.1)' : 'rgba(143,124,92,.4)')
+            : (isLine ? 'rgba(148,163,184,.07)' : 'rgba(203,213,225,.75)'),
+          borderColor: dark ? '#8f7c5c' : '#94a3b8',
           borderWidth: isLine ? 2 : 0,
           borderRadius: isLine ? 0 : 5,
           tension: 0.42,
           fill: isLine,
           borderDash: isLine ? [6,4] : [],
-          pointBackgroundColor: '#94a3b8',
-          pointBorderColor: '#fff',
+          pointBackgroundColor: dark ? '#8f7c5c' : '#94a3b8',
+          pointBorderColor: dark ? '#14110c' : '#fff',
           pointBorderWidth: 2,
           pointRadius: isLine ? 3 : 0,
           pointHoverRadius: 7,
-          pointHoverBackgroundColor: '#64748b',
+          pointHoverBackgroundColor: dark ? '#b9a483' : '#64748b',
         },
         {
           label: 'Current Period',
           data: curData,
-          backgroundColor: isLine ? 'rgba(15,23,42,.07)' : 'rgba(15,23,42,.82)',
-          borderColor: '#0f172a',
+          // Dark mode: near-black fill (the light-mode color) would be
+          // invisible against a near-black background, so this swaps to the
+          // bright brand gold instead of just dimming the same color.
+          backgroundColor: dark
+            ? (isLine ? 'rgba(224,160,32,.16)' : 'rgba(224,160,32,.88)')
+            : (isLine ? 'rgba(15,23,42,.07)' : 'rgba(15,23,42,.82)'),
+          borderColor: dark ? '#e0a020' : '#0f172a',
           borderWidth: isLine ? 2.5 : 0,
           borderRadius: isLine ? 0 : 5,
           tension: 0.42,
           fill: isLine,
-          pointBackgroundColor: '#0f172a',
-          pointBorderColor: '#fff',
+          pointBackgroundColor: dark ? '#e0a020' : '#0f172a',
+          pointBorderColor: dark ? '#14110c' : '#fff',
           pointBorderWidth: 2,
           pointRadius: isLine ? 4 : 0,
           pointHoverRadius: 8,
-          pointHoverBackgroundColor: '#0f172a',
-          pointHoverBorderColor: '#fff',
+          pointHoverBackgroundColor: dark ? '#e0a020' : '#0f172a',
+          pointHoverBorderColor: dark ? '#14110c' : '#fff',
           pointHoverBorderWidth: 2.5,
         }
       ]
@@ -629,7 +766,7 @@ function renderChart(curPayments, prevPayments, current, previous) {
           align: 'end',
           labels: {
             font: { family: 'Inter', size: 12, weight: '600' },
-            color: '#64748b',
+            color: dark ? '#b9a483' : '#64748b',
             boxWidth: 10, boxHeight: 10,
             borderRadius: 3,
             padding: 16,
@@ -637,10 +774,10 @@ function renderChart(curPayments, prevPayments, current, previous) {
           }
         },
         tooltip: {
-          backgroundColor: '#0f172a',
-          titleColor: '#94a3b8',
-          bodyColor: '#f1f5f9',
-          borderColor: 'rgba(255,255,255,.1)',
+          backgroundColor: dark ? '#1a160f' : '#0f172a',
+          titleColor: dark ? '#b9a483' : '#94a3b8',
+          bodyColor: dark ? '#f1e9db' : '#f1f5f9',
+          borderColor: dark ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.1)',
           borderWidth: 1,
           padding: 13,
           cornerRadius: 10,
@@ -655,10 +792,10 @@ function renderChart(curPayments, prevPayments, current, previous) {
       scales: {
         x: {
           grid: { display: false },
-          border: { display: true, color: '#000000', width: 1 },
+          border: { display: true, color: dark ? 'rgba(255,255,255,.15)' : '#000000', width: 1 },
           ticks: {
             font: { family: 'Inter', size: 11 },
-            color: '#a0722a',
+            color: dark ? '#b9a483' : '#a0722a',
             maxRotation: 45,
             autoSkip: true,
             maxTicksLimit: 14,
@@ -666,12 +803,12 @@ function renderChart(curPayments, prevPayments, current, previous) {
         },
         y: {
           position: 'left',
-          grid: { color: '#f1f5f9' },
+          grid: { color: dark ? 'rgba(255,255,255,.06)' : '#f1f5f9' },
           border: { display: false, dash: [4,4] },
           beginAtZero: true,
           ticks: {
             font: { family: 'Inter', size: 11 },
-            color: '#a0722a',
+            color: dark ? '#b9a483' : '#a0722a',
             maxTicksLimit: 6,
             callback: v => v >= 1000
               ? '₹' + (v/1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'K'
@@ -738,40 +875,6 @@ async function loadPendingReferrals() {
   }
 }
 
-// ── Drive archival ──────────────────────────────────────────────────────────
-
-function showArchiveButton() {
-  document.getElementById('connect-drive-btn').style.display = 'none';
-  document.getElementById('archive-btn').style.display = '';
-}
-
-function connectDrive() {
-  requestDriveToken(
-    () => { showArchiveButton(); showToast('Google Drive connected.', 'success'); },
-    (err) => showToast(err.message, 'danger')
-  );
-}
-
-async function runArchive() {
-  const btn    = document.getElementById('archive-btn');
-  const status = document.getElementById('archive-status');
-  btn.disabled = true;
-  btn.textContent = 'Archiving…';
-  status.innerHTML = '<div class="loading" style="display:inline-flex;gap:.5rem"><div class="spinner"></div> Working…</div>';
-
-  try {
-    const result = await archiveOldPhotos(({ archived, total }) => {
-      status.textContent = `Archived ${archived} of ${total}…`;
-    });
-    status.innerHTML = `<span style="color:var(--success)">Done — ${result.archived} photo${result.archived !== 1 ? 's' : ''} archived.</span>` +
-      (result.errors.length ? `<br><span style="color:var(--danger)">${result.errors.join('; ')}</span>` : '');
-  } catch (e) {
-    status.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Archive Old Photos';
-  }
-}
 </script>
 </body>
 </html>

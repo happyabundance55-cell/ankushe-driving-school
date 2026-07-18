@@ -2,13 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as every other page's
+    // toggle, so a preference set anywhere carries over everywhere.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Referrals — Ankushe Driving School</title>
+  <title>Referrals — Sarathi</title>
   <link rel="stylesheet" href="../shared/css/main.css">
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/db.js"></script>
   <script src="../shared/js/utils.js"></script>
@@ -26,7 +37,7 @@
 <body>
 
 <nav class="navbar">
-  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Ankushe" onerror="this.style.display='none'"> Ankushe</a>
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Sarathi" onerror="this.style.display='none'"> Sarathi</a>
   <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
   <div class="nav-overlay" onclick="closeNav()"></div>
   <ul class="navbar-links">
@@ -40,6 +51,12 @@
     <li><a href="roster.html">Roster</a></li>
     <li><a href="masters.html">Masters</a></li>
     <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+    <li>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </li>
   </ul>
 </nav>
 
@@ -98,7 +115,7 @@
 </div>
 
 <script>
-requireAuth(['admin']).then(loadAll);
+bootstrapPage(['admin']).then(loadAll);
 
 async function loadAll() {
   loadVisits();
@@ -179,7 +196,7 @@ async function loadVisits() {
           <td><strong>${escapeHtml(v.referrerName)}</strong></td>
           <td class="td-muted">${escapeHtml(v.enrollmentNo)}</td>
           <td class="td-muted">${formatDateTime(v.clickedAt)}</td>
-          <td><a href="student-form.html?ref=${encodeURIComponent(v.refCode)}" class="btn btn-sm btn-primary">Enroll</a></td>
+          <td><a href="${tenantUrl('student-form.html', { ref: v.refCode })}" class="btn btn-sm btn-primary">Enroll</a></td>
         </tr>`).join('')}
       </tbody>
     </table></div>`;

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // Runs before first paint — same storage key as every other page's
+    // toggle, so a preference set anywhere carries over everywhere.
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seed Demo Data — Sarathi</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../shared/js/tenant.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+</head>
+<body>
+
+<div class="page-container" style="max-width:560px">
+  <div class="page-title">Seed Demo Data</div>
+  <div class="card">
+    <p style="font-size:.9rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.6">
+      Adds 10 sample students (with varied enrollment dates, payments, and a couple of
+      attendance sessions), 3 vehicle classes, 2 DL authorities, 2 training vehicles,
+      2 upcoming driving tests, and 1 referral — into <strong id="seed-tenant-name">this school</strong>.
+      Safe to run once on a fresh/test school; running it again will add a second batch
+      of the same students (not update existing ones).
+    </p>
+    <button class="btn btn-primary" id="seed-btn" onclick="runSeed()" disabled>Seed Demo Data</button>
+    <div id="seed-log" style="margin-top:1rem;font-size:.82rem;color:var(--text-muted);max-height:260px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script>
+bootstrapPage(['admin']).then(({ tenant }) => {
+  document.getElementById('seed-tenant-name').textContent = tenant.name || 'this school';
+  document.getElementById('seed-btn').disabled = false;
+});
+
+function say(msg) {
+  const log = document.getElementById('seed-log');
+  const p = document.createElement('div');
+  p.textContent = msg;
+  log.appendChild(p);
+  log.scrollTop = log.scrollHeight;
+}
+
+const DEMO_STUDENTS = [
+  { name: 'Rohan Deshmukh', phone: '9822011111', vehicleClass: 'LMV',  totalFee: 800000,  paid: [400000, 400000], daysAgo: 55 },
+  { name: 'Sneha Patil',    phone: '9822022222', vehicleClass: 'LMV',  totalFee: 750000,  paid: [400000],         daysAgo: 48 },
+  { name: 'Amit Kulkarni',  phone: '9822033333', vehicleClass: 'MCWG', totalFee: 500000,  paid: [500000],         daysAgo: 40 },
+  { name: 'Priya Joshi',    phone: '9822044444', vehicleClass: 'LMV',  totalFee: 800000,  paid: [],               daysAgo: 6  },
+  { name: 'Vikram Shinde',  phone: '9822055555', vehicleClass: 'HMV',  totalFee: 1200000, paid: [600000],         daysAgo: 33 },
+  { name: 'Neha Pawar',     phone: '9822066666', vehicleClass: 'LMV',  totalFee: 800000,  paid: [800000],         daysAgo: 60 },
+  { name: 'Rahul Jadhav',   phone: '9822077777', vehicleClass: 'LMV',  totalFee: 750000,  paid: [300000],         daysAgo: 20 },
+  { name: 'Ananya Kale',    phone: '9822088888', vehicleClass: 'MCWG', totalFee: 500000,  paid: [250000],         daysAgo: 15 },
+  { name: 'Suresh More',    phone: '9822099999', vehicleClass: 'LMV',  totalFee: 800000,  paid: [800000],         daysAgo: 50 },
+  { name: 'Pooja Bhosale',  phone: '9822010101', vehicleClass: 'LMV',  totalFee: 750000,  paid: [500000],         daysAgo: 10 }
+];
+
+async function runSeed() {
+  if (!confirm('Add demo students, payments, and attendance to this school?')) return;
+  const btn = document.getElementById('seed-btn');
+  btn.disabled = true;
+  document.getElementById('seed-log').innerHTML = '';
+
+  try {
+    const adminUid = (await getCurrentUser()).uid;
+
+    say('Adding vehicle classes...');
+    for (const vc of ['LMV', 'MCWG', 'HMV']) { try { await addVehicleClass(vc); } catch { /* exists */ } }
+
+    say('Adding DL authorities...');
+    for (const dla of ['MH12', 'MH14']) { try { await addDLAuthority(dla); } catch { /* exists */ } }
+
+    say('Adding training vehicles...');
+    try { await addTrainingVehicle('MH12 GK 8618', 'Maruti Suzuki Swift'); } catch { /* exists */ }
+    try { await addTrainingVehicle('MH12 AB 4521', 'Hyundai i20'); } catch { /* exists */ }
+
+    const created = [];
+    for (const s of DEMO_STUDENTS) {
+      say(`Enrolling ${s.name}...`);
+      const enrollDate = new Date(); enrollDate.setDate(enrollDate.getDate() - s.daysAgo);
+      const student = await createStudent({
+        name: s.name, phone: s.phone, dob: '2004-05-15', address: 'Pune, Maharashtra',
+        vehicleClass: s.vehicleClass, enrollmentDate: enrollDate.toISOString().slice(0, 10),
+        totalFee: s.totalFee, paidFee: 0
+      });
+      created.push(student);
+
+      // Backdated payments — recordPayment() always dates itself "now", which
+      // would pile every seeded payment onto today. Writing directly here so
+      // the revenue chart actually shows a trend across the last couple months.
+      let paidSoFar = 0;
+      for (let i = 0; i < s.paid.length; i++) {
+        const payDate = new Date(enrollDate);
+        payDate.setDate(payDate.getDate() + i * 7 + 2);
+        await tenantCol('payments').add({
+          studentId: student.id, studentName: s.name, enrollmentNumber: student.enrollmentNumber,
+          amount: s.paid[i], method: i === 0 ? 'cash' : 'upi', note: '',
+          date: firebase.firestore.Timestamp.fromDate(payDate),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        paidSoFar += s.paid[i];
+      }
+      if (paidSoFar > 0) {
+        await tenantCol('students').doc(student.id).update({ paidFee: paidSoFar, balance: s.totalFee - paidSoFar });
+      }
+
+      if (s.daysAgo > 20) {
+        for (let i = 0; i < 3; i++) {
+          const attDate = new Date(enrollDate);
+          attDate.setDate(attDate.getDate() + 3 + i * 4);
+          if (attDate > new Date()) break;
+          await tenantCol('attendance').add({
+            studentId: student.id, studentName: s.name, enrollmentNumber: student.enrollmentNumber,
+            date: firebase.firestore.Timestamp.fromDate(attDate),
+            markedBy: adminUid, markedByRole: 'admin', mentorName: 'Demo Instructor', signatureDataURL: '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      }
+    }
+
+    say('Scheduling driving tests...');
+    const t1 = new Date(); t1.setDate(t1.getDate() + 4);
+    const t2 = new Date(); t2.setDate(t2.getDate() + 9);
+    await scheduleDrivingTest(created[3].id, { scheduledAt: t1.toISOString(), venue: 'RTO Pune', notes: '' });
+    await scheduleDrivingTest(created[7].id, { scheduledAt: t2.toISOString(), venue: 'RTO Pune', notes: '' });
+
+    say('Adding a referral...');
+    await createReferral({
+      referrerId: created[0].id, referrerId_enrollmentNo: created[0].enrollmentNumber, referrerName: created[0].name,
+      referredId: created[3].id, referredName: created[3].name
+    });
+
+    say('Done. Open the Dashboard to see it.');
+  } catch (e) {
+    say('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

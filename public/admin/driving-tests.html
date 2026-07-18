@@ -35,6 +35,7 @@
     }
     .ts-wrapper.single.input-active .ts-control {
       border-color: var(--primary);
+      background: var(--white); color: var(--text);
     }
     .ts-dropdown {
       border: 1.5px solid var(--border);
@@ -54,7 +55,7 @@
       transition: background var(--transition);
     }
     .ts-dropdown .option:hover,
-    .ts-dropdown .option.active  { background: var(--bg-hover); color: var(--text); }
+    .ts-dropdown .option.active  { background: var(--primary-light); color: var(--primary); }
     .ts-dropdown .option.selected { background: var(--primary-light); color: var(--primary); font-weight: 600; }
     .ts-dropdown input.ts-search {
       border: none;
@@ -171,6 +172,88 @@
 
     /* Wider dropdown inside modal */
     #modal-overlay .ts-dropdown { z-index: 600; }
+
+    /* ── Date & time picker ──────────────────────────────────────
+       Native <input type="datetime-local"> stays the real value store
+       (nothing else in the page changes), but its own popup/segment
+       highlighting is unstylable OS chrome (that blue selection you
+       can't override). On a mouse/desktop we hide it and drive it from
+       this custom calendar instead; on touch it's shown as-is so phones
+       keep their native sliding picker. */
+    .dt-field { position: relative; }
+    .dt-field .dt-native { display: none; }
+    .dt-field.is-touch .dt-native {
+      display: block; width: 100%; max-width: 100%;
+    }
+    .dt-field.is-touch .dt-display { display: none; }
+    .dt-display {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: .58rem .85rem;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--white); color: var(--text);
+      font-size: .9rem; font-family: inherit; cursor: pointer;
+      transition: border-color var(--transition);
+    }
+    .dt-display:hover { border-color: var(--primary-muted); }
+    .dt-display svg { color: var(--text-muted); flex-shrink: 0; margin-left: .5rem; }
+    .dt-dropdown {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      background: var(--white); border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+      padding: 1rem; width: 270px;
+    }
+    .dt-dropdown.open { display: block; }
+    .dt-cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; }
+    .dt-cal-title { font-weight: 700; font-size: .92rem; }
+    .dt-nav-btn {
+      width: 26px; height: 26px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: none; cursor: pointer; font-size: .95rem; color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      transition: background .12s;
+    }
+    .dt-nav-btn:hover { background: var(--bg-hover); }
+    .dt-weekdays {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--text-muted); text-align: center; padding-bottom: .3rem;
+    }
+    .dt-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .15rem; }
+    .dt-day {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; font-size: .82rem; cursor: pointer; color: var(--text);
+      transition: background .12s, color .12s;
+    }
+    .dt-day:hover { background: var(--primary-light); color: var(--primary); }
+    .dt-day.selected { background: var(--primary); color: #fff; font-weight: 700; }
+    .dt-day.today:not(.selected) { border: 1.5px solid var(--primary-muted); }
+    .dt-day.other-month { color: var(--text-subtle); opacity: .45; cursor: default; }
+    .dt-day.other-month:hover { background: none; color: var(--text-subtle); }
+    .dt-time-row {
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      margin-top: .85rem; padding-top: .85rem; border-top: 1.5px solid var(--border);
+    }
+    .dt-time-group { display: flex; flex-direction: column; align-items: center; gap: .15rem; }
+    .dt-time-step {
+      background: none; border: none; cursor: pointer; color: var(--text-muted);
+      font-size: .55rem; line-height: 1; padding: .15rem; transition: color .12s;
+    }
+    .dt-time-step:hover { color: var(--primary); }
+    .dt-time-val {
+      width: 2.5rem; text-align: center; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      padding: .3rem 0; font-size: .95rem; font-weight: 700; color: var(--text);
+      background: var(--white); font-family: inherit; cursor: default;
+    }
+    .dt-time-colon { font-weight: 700; font-size: 1.05rem; color: var(--text-muted); }
+    .dt-ampm { display: flex; flex-direction: column; gap: .2rem; margin-left: .3rem; }
+    .dt-ampm-btn {
+      padding: .22rem .5rem; font-size: .68rem; font-weight: 700; font-family: inherit;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--white); color: var(--text-muted); cursor: pointer;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .dt-ampm-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .dt-actions { display: flex; margin-top: .85rem; }
+    #modal-overlay .dt-dropdown { z-index: 620; }
   </style>
   <script src="../shared/js/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -281,7 +364,42 @@
 
     <div class="form-group">
       <label>Date &amp; Time *</label>
-      <input type="datetime-local" id="m-datetime" style="max-width:100%;width:100%">
+      <div class="dt-field" id="m-datetime-field">
+        <input type="datetime-local" id="m-datetime" class="dt-native">
+        <button type="button" class="dt-display" id="m-datetime-display" onclick="_dtToggle()">
+          <span id="m-datetime-display-text">Select date &amp; time</span>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </button>
+        <div class="dt-dropdown" id="m-datetime-dropdown">
+          <div class="dt-cal-header">
+            <button type="button" class="dt-nav-btn" onclick="_dtChangeMonth(-1)">&#8249;</button>
+            <span class="dt-cal-title" id="dt-cal-title"></span>
+            <button type="button" class="dt-nav-btn" onclick="_dtChangeMonth(1)">&#8250;</button>
+          </div>
+          <div class="dt-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+          <div class="dt-days" id="dt-days"></div>
+          <div class="dt-time-row">
+            <div class="dt-time-group">
+              <button type="button" class="dt-time-step" onclick="_dtStepTime('hour',1)">&#9650;</button>
+              <input type="text" class="dt-time-val" id="dt-hour-val" readonly>
+              <button type="button" class="dt-time-step" onclick="_dtStepTime('hour',-1)">&#9660;</button>
+            </div>
+            <span class="dt-time-colon">:</span>
+            <div class="dt-time-group">
+              <button type="button" class="dt-time-step" onclick="_dtStepTime('minute',1)">&#9650;</button>
+              <input type="text" class="dt-time-val" id="dt-minute-val" readonly>
+              <button type="button" class="dt-time-step" onclick="_dtStepTime('minute',-1)">&#9660;</button>
+            </div>
+            <div class="dt-ampm">
+              <button type="button" class="dt-ampm-btn" id="dt-am-btn" onclick="_dtSetAmpm('AM')">AM</button>
+              <button type="button" class="dt-ampm-btn" id="dt-pm-btn" onclick="_dtSetAmpm('PM')">PM</button>
+            </div>
+          </div>
+          <div class="dt-actions">
+            <button type="button" class="btn btn-primary btn-sm" style="flex:1" onclick="document.getElementById('m-datetime-dropdown').classList.remove('open')">Done</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="form-group">
@@ -318,6 +436,128 @@ let _students  = [];
 let _editingId = null;
 let tsFilter   = null;
 let tsStudent  = null;
+
+// ── Date & time picker (see .dt-field CSS above for why) ──────────────
+let _dtYear, _dtMonth, _dtDay = null, _dtHour = 12, _dtMinute = 0, _dtAmpm = 'AM';
+
+if (window.matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('m-datetime-field').classList.add('is-touch');
+}
+
+function _dtSetValue(val) {
+  document.getElementById('m-datetime').value = val;
+  if (val) {
+    const [datePart, timePart] = val.split('T');
+    const [y, mo, d] = datePart.split('-').map(Number);
+    const [h24, mi]  = timePart.split(':').map(Number);
+    _dtYear = y; _dtMonth = mo - 1; _dtDay = d;
+    _dtHour = h24 % 12 || 12; _dtMinute = mi; _dtAmpm = h24 >= 12 ? 'PM' : 'AM';
+  } else {
+    const now = new Date();
+    _dtYear = now.getFullYear(); _dtMonth = now.getMonth(); _dtDay = null;
+    _dtHour = 12; _dtMinute = 0; _dtAmpm = 'AM';
+  }
+  _dtUpdateDisplay();
+  if (document.getElementById('m-datetime-dropdown').classList.contains('open')) _dtRenderCalendar();
+}
+
+function _dtSyncNativeValue() {
+  if (_dtDay == null) { document.getElementById('m-datetime').value = ''; _dtUpdateDisplay(); return; }
+  let h24 = _dtHour % 12;
+  if (_dtAmpm === 'PM') h24 += 12;
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('m-datetime').value = `${_dtYear}-${pad(_dtMonth + 1)}-${pad(_dtDay)}T${pad(h24)}:${pad(_dtMinute)}`;
+  _dtUpdateDisplay();
+}
+
+function _dtUpdateDisplay() {
+  const el = document.getElementById('m-datetime-display-text');
+  if (_dtDay == null) { el.textContent = 'Select date & time'; el.style.color = 'var(--text-subtle)'; return; }
+  el.style.color = '';
+  const dateStr = new Date(_dtYear, _dtMonth, _dtDay).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  el.textContent = `${dateStr}, ${_dtHour}:${String(_dtMinute).padStart(2, '0')} ${_dtAmpm}`;
+}
+
+function _dtRenderCalendar() {
+  document.getElementById('dt-cal-title').textContent =
+    new Date(_dtYear, _dtMonth, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  const firstDow     = new Date(_dtYear, _dtMonth, 1).getDay();
+  const daysInMonth  = new Date(_dtYear, _dtMonth + 1, 0).getDate();
+  const prevDaysInMo = new Date(_dtYear, _dtMonth, 0).getDate();
+  const now = new Date();
+
+  const cells = [];
+  for (let i = firstDow - 1; i >= 0; i--) cells.push({ day: prevDaysInMo - i, muted: true });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, muted: false });
+  let nextDay = 1;
+  while (cells.length % 7 !== 0) cells.push({ day: nextDay++, muted: true });
+
+  document.getElementById('dt-days').innerHTML = cells.map(c => {
+    const isToday = !c.muted && _dtYear === now.getFullYear() && _dtMonth === now.getMonth() && c.day === now.getDate();
+    const isSel   = !c.muted && _dtDay === c.day;
+    return `<div class="dt-day${c.muted ? ' other-month' : ''}${isSel ? ' selected' : ''}${(isToday && !isSel) ? ' today' : ''}"
+                 ${c.muted ? '' : `onclick="_dtSelectDay(${c.day})"`}>${c.day}</div>`;
+  }).join('');
+
+  document.getElementById('dt-hour-val').value   = String(_dtHour).padStart(2, '0');
+  document.getElementById('dt-minute-val').value = String(_dtMinute).padStart(2, '0');
+  document.getElementById('dt-am-btn').classList.toggle('active', _dtAmpm === 'AM');
+  document.getElementById('dt-pm-btn').classList.toggle('active', _dtAmpm === 'PM');
+}
+
+function _dtSelectDay(day) {
+  _dtDay = day;
+  _dtSyncNativeValue();
+  _dtRenderCalendar();
+}
+
+function _dtChangeMonth(delta) {
+  _dtMonth += delta;
+  if (_dtMonth < 0)  { _dtMonth = 11; _dtYear--; }
+  if (_dtMonth > 11) { _dtMonth = 0;  _dtYear++; }
+  _dtRenderCalendar();
+}
+
+function _dtStepTime(kind, dir) {
+  if (kind === 'hour') {
+    _dtHour += dir;
+    if (_dtHour > 12) _dtHour = 1;
+    if (_dtHour < 1)  _dtHour = 12;
+  } else {
+    _dtMinute += dir;
+    if (_dtMinute > 59) _dtMinute = 0;
+    if (_dtMinute < 0)  _dtMinute = 59;
+  }
+  if (_dtDay != null) _dtSyncNativeValue();
+  _dtRenderCalendar();
+}
+
+function _dtSetAmpm(v) {
+  _dtAmpm = v;
+  if (_dtDay != null) _dtSyncNativeValue();
+  _dtRenderCalendar();
+}
+
+function _dtToggle() {
+  const dd = document.getElementById('m-datetime-dropdown');
+  const willOpen = !dd.classList.contains('open');
+  dd.classList.toggle('open', willOpen);
+  if (willOpen) _dtRenderCalendar();
+}
+
+document.addEventListener('click', e => {
+  // composedPath(), not field.contains(e.target) — a day-cell click re-renders
+  // #dt-days (to show the new selection) while this same click is still
+  // bubbling, detaching e.target from the document. contains() on a detached
+  // node is always false, which read as "clicked outside" and closed the
+  // dropdown right after every day pick. composedPath() is captured at
+  // dispatch time, before that mutation, so it's unaffected.
+  const field = document.getElementById('m-datetime-field');
+  if (field && !e.composedPath().includes(field)) document.getElementById('m-datetime-dropdown').classList.remove('open');
+});
+
+_dtSetValue('');
 
 bootstrapPage(['admin']).then(async () => {
   _students = await getStudents({ status: 'all' });
@@ -439,7 +679,7 @@ function openModal() {
   document.getElementById('modal-heading').textContent = 'Schedule Driving Test';
   tsStudent.clear();
   tsStudent.enable();
-  document.getElementById('m-datetime').value  = '';
+  _dtSetValue('');
   document.getElementById('m-venue').value     = '';
   document.getElementById('m-notes').value     = '';
   document.getElementById('m-status').value    = 'scheduled';
@@ -455,7 +695,7 @@ function editTest(id) {
   document.getElementById('modal-heading').textContent = 'Edit Driving Test';
   tsStudent.setValue(t.studentId);
   tsStudent.disable();
-  document.getElementById('m-datetime').value  = t.scheduledAt ? _localDateTimeValue(t.scheduledAt) : '';
+  _dtSetValue(t.scheduledAt ? _localDateTimeValue(t.scheduledAt) : '');
   document.getElementById('m-venue').value     = t.venue || '';
   document.getElementById('m-notes').value     = t.notes || '';
   document.getElementById('m-status').value    = t.status || 'scheduled';
@@ -466,6 +706,7 @@ function editTest(id) {
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('m-datetime-dropdown').classList.remove('open');
   _editingId = null;
 }
 

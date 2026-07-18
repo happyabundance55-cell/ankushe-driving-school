@@ -3,7 +3,12 @@
 /* ─── Reset ─────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { max-width: 100%; overflow-x: hidden; }
+/* overflow-x: clip (not hidden) — hidden with overflow-y unset forces
+   overflow-y to compute as auto, turning body into an accidental scroll
+   container that breaks position:sticky on its children (navbar, tab
+   bars, etc.), since html — not body — is the element that actually
+   scrolls. clip has no such pairing quirk. */
+html, body { max-width: 100%; overflow-x: clip; }
 /* Always reserve space for the vertical scrollbar, whether or not the
    current page actually needs one — without this, switching from a short
    page (no scrollbar) to a tall one (has a scrollbar) shifts all content,

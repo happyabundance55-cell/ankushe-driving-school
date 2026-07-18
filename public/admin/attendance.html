@@ -251,7 +251,7 @@ bootstrapPage(['admin']).then(async ({ profile }) => {
   instructors.forEach(i => {
     instrSel.appendChild(Object.assign(document.createElement('option'), { value: i.name, textContent: i.name }));
   });
-  new TomSelect('#mark-mentor', { placeholder: '— Select Instructor —', allowEmptyOption: true, create: false });
+  new TomSelect('#mark-mentor', { placeholder: '— Select Instructor —', create: false });
 
   const instrFilter = document.getElementById('instr-filter-select');
   instructors.forEach(i => {
@@ -288,8 +288,8 @@ function populateStudentDropdowns(students) {
       sel.appendChild(Object.assign(document.createElement('option'), { value: s.id, textContent: `${s.name} (${s.enrollmentNumber})` }));
     });
   });
-  _tsMarkStudent   = new TomSelect('#mark-student',   { placeholder: '— Type to search student —', allowEmptyOption: true, create: false });
-  _tsFilterStudent = new TomSelect('#filter-student', { placeholder: 'All Students', allowEmptyOption: true, create: false, onChange: () => loadAttendance() });
+  _tsMarkStudent   = new TomSelect('#mark-student',   { placeholder: '— Type to search student —', create: false });
+  _tsFilterStudent = new TomSelect('#filter-student', { placeholder: 'All Students', create: false, onChange: () => loadAttendance() });
 }
 
 async function submitAttendance() {

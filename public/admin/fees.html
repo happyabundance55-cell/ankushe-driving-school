@@ -147,7 +147,7 @@
     </div>
 
     <!-- Record payment -->
-    <div class="card">
+    <div class="card" id="pay-card">
       <div class="card-title">Record Payment</div>
       <div class="form-row">
         <div class="form-group">
@@ -233,6 +233,7 @@ async function loadStudentFees(id) {
   const balEl = document.getElementById('fee-balance');
   balEl.textContent = formatCurrency(s.balance);
   balEl.style.color = s.balance > 0 ? 'var(--danger)' : 'var(--success)';
+  document.getElementById('pay-card').style.display = s.balance > 0 ? '' : 'none';
   document.getElementById('new-total-fee').value = s.totalFee / 100;
   await Promise.all([ loadPaymentHistory(id), loadAdjustmentHistory(id) ]);
 }

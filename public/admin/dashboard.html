@@ -56,14 +56,28 @@
        renders as our own themed .ts-dropdown popup instead of the browser's
        native OS-styled one, which used to stay light/white even in dark
        mode — same fix already applied to the Attendance/Fees/Tests dropdowns. */
+    /* Fixed height + flex centering, not padding-driven sizing — the
+       hidden search <input> inside .ts-control is a real native form
+       element, so leaving its height to content lets OS-level text
+       scaling inflate this pill out of sync with the plain-span
+       #period-label sitting next to it. Locking the height (and
+       resetting the input to fill it) keeps the two pills the same
+       size no matter what. */
     .ts-wrapper.single .ts-control {
-      font-size: .8rem; padding: .28rem .55rem;
+      display: flex !important; align-items: center;
+      height: 27.5px; box-sizing: border-box;
+      font-size: .8rem; padding: 0 .55rem;
       border: 1.5px solid rgba(255,255,255,.55);
       border-radius: var(--radius-pill);
       background: rgba(255,255,255,.62);
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
       color: var(--text); font-family: inherit; cursor: pointer;
       box-shadow: var(--shadow-sm); width: auto; max-width: 220px;
+    }
+    .ts-wrapper.single .ts-control > input {
+      height: 100% !important; min-height: 0 !important;
+      padding: 0 !important; margin: 0 !important;
+      line-height: normal !important; font-size: inherit !important;
     }
     .ts-wrapper.single.focus .ts-control { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
     .ts-dropdown {

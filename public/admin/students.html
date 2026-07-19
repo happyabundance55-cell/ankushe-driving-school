@@ -180,12 +180,14 @@ document.addEventListener('click', () => { document.getElementById('row-actions-
 document.addEventListener('scroll', () => { document.getElementById('row-actions-menu').style.display = 'none'; }, true);
 
 bootstrapPage(['admin']).then(async () => {
+  // controlInput: null — short, fixed option lists (4 and 3 items), no need
+  // for a typable search box; click/keyboard-arrow select only.
   new TomSelect('#status-filter', {
-    allowEmptyOption: false, create: false,
+    allowEmptyOption: false, create: false, controlInput: null,
     onChange: () => applyFilters(),
   });
   new TomSelect('#balance-filter', {
-    allowEmptyOption: false, create: false,
+    allowEmptyOption: false, create: false, controlInput: null,
     onChange: () => applyFilters(),
   });
   _allStudents = await getStudents({ status: 'active' });

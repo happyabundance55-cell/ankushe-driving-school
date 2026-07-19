@@ -82,8 +82,12 @@ async function getNextEnrollmentNumber() {
 
 async function ensureActiveStudentCountInitialized(tenant) {
   if (tenant.activeStudentCount != null) return tenant.activeStudentCount;
-  const snap = await tenantCol('students').where('status', '==', 'active').count().get();
-  const count = snap.data().count;
+  // Plain .get() + .size, not .count() — the aggregation API isn't
+  // available in the compat SDK build this app loads (confirmed by a live
+  // "count is not a function" error), and at this app's scale (tens of
+  // students per school) reading the actual docs costs nothing meaningful.
+  const snap = await tenantCol('students').where('status', '==', 'active').get();
+  const count = snap.size;
   // Best-effort: under the OLD (pre-counter) rules this always succeeds; once
   // the counter-verifying rules are live, a first-time set with no prior
   // value falls through to activeStudentCountChangeVerified()'s no-op branch

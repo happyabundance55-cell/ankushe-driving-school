@@ -57,24 +57,53 @@ async function getNextEnrollmentNumber() {
 
 // ─── Students ─────────────────────────────────────────────────────────────────
 
-// Counts only status:'active' — pending/inactive students aren't using real
-// capacity, matching the plan's "N active students" promise (not a lifetime
-// cap on students ever created). Reads the plan cap fresh from Firestore
-// rather than tenant.js's cached copy, which can lag up to 5 min after a
-// plan upgrade/downgrade — this check must never be stale.
+// ── Active-student cap enforcement ──────────────────────────────────────────
+// tenants/{tid}.activeStudentCount is a denormalized live count, kept in sync
+// with reality by firestore.rules itself: every write that flips a student's
+// status to/from 'active' must, in the SAME batch, move this counter by
+// exactly +-1 and stay within studentCap (see studentCapRespectedOnCreate/
+// OnUpdate + activeStudentCountChangeVerified in firestore.rules) — verified
+// via getAfter(), which lets one document's rule inspect another document's
+// post-batch state. That's what makes this safe against someone bypassing
+// the UI and writing to Firestore directly (browser console, a standalone
+// script with their own real login, etc.): the rule rejects the *whole*
+// batch if the student write and the counter write don't correctly agree,
+// so there's no way to activate a student without the counter following, and
+// no way to move the counter without a real, verified student transition
+// backing it (which stops "decrement with no real deactivation, bank that
+// fake headroom, activate someone extra later" too).
 //
-// Wired into every path that can set a student's status to 'active'
-// (createStudent, approveStudent, reactivateStudent) — none of them, so
-// there's no path around it. Deliberately not wrapped in a transaction: the
-// only way to hit the TOCTOU race this leaves open is two admin clicks
-// landing within the same tens-of-milliseconds window, which given this is
-// a single admin clicking buttons in a browser (no bulk/scripted approval
-// path exists) isn't worth the complexity of a counter-based rewrite.
+// _capEventStudentId is a plain pointer field written alongside every
+// counter change, purely so the tenant-doc's rule knows which student
+// document to getAfter()-check — it has no meaning on its own.
+//
+// This only works because activeStudentCount is guaranteed accurate to begin
+// with — see ensureActiveStudentCountInitialized().
+
+async function ensureActiveStudentCountInitialized(tenant) {
+  if (tenant.activeStudentCount != null) return tenant.activeStudentCount;
+  const snap = await tenantCol('students').where('status', '==', 'active').count().get();
+  const count = snap.data().count;
+  // Best-effort: under the OLD (pre-counter) rules this always succeeds; once
+  // the counter-verifying rules are live, a first-time set with no prior
+  // value falls through to activeStudentCountChangeVerified()'s no-op branch
+  // only if count is unchanged, so this must run (and succeed) before that
+  // deploy for any tenant that already has active students — see the
+  // migration note in firestore.rules.
+  await tenantRef().update({ activeStudentCount: count }).catch(() => {});
+  return count;
+}
+
+// Reads the plan cap and live count fresh from Firestore rather than
+// tenant.js's cached copy, which can lag up to 5 min after a plan
+// upgrade/downgrade — this check must never be stale. This is the
+// fast/friendly client-side check (nice error message before even
+// attempting a write); firestore.rules is the real enforcement.
 async function assertUnderStudentCap() {
   const tenant = await getTenantSettings();
-  if (!tenant || tenant.studentCap == null) return;
-  const snap = await tenantCol('students').where('status', '==', 'active').count().get();
-  if (snap.data().count >= tenant.studentCap) {
+  if (!tenant) return;
+  const count = await ensureActiveStudentCountInitialized(tenant);
+  if (tenant.studentCap != null && count >= tenant.studentCap) {
     throw new Error(`Student limit reached for your plan (${tenant.studentCap} active students). Upgrade your plan in Billing, or deactivate another student first.`);
   }
 }
@@ -132,6 +161,10 @@ async function createStudent(data) {
   // Public-safe projection so this student can be looked up as a referrer
   // from the (unauthenticated) referral-link banner.
   batch.set(tenantCol('referralCodes').doc(enrollmentNumber), { referrerId: ref.id, referrerName: student.name });
+  batch.update(tenantRef(), {
+    activeStudentCount: firebase.firestore.FieldValue.increment(1),
+    _capEventStudentId: ref.id
+  });
   await batch.commit();
 
   return { id: ref.id, ...student, enrollmentNumber };
@@ -202,11 +235,14 @@ async function approveStudent(id) {
   if (!existing.enrollmentNumber) {
     updates.enrollmentNumber = await getNextEnrollmentNumber();
   }
-  await tenantCol('students').doc(id).update(updates);
 
+  const batch = getDb().batch();
+  batch.update(tenantCol('students').doc(id), updates);
+  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(1), _capEventStudentId: id });
   if (updates.enrollmentNumber) {
-    await tenantCol('referralCodes').doc(updates.enrollmentNumber).set({ referrerId: id, referrerName: existing.name });
+    batch.set(tenantCol('referralCodes').doc(updates.enrollmentNumber), { referrerId: id, referrerName: existing.name });
   }
+  await batch.commit();
   return updates;
 }
 
@@ -216,12 +252,18 @@ async function approveStudent(id) {
 // inactive/active can free a slot for someone else, but can never result in
 // more concurrently-active students than the plan allows.
 async function deactivateStudent(id) {
-  await tenantCol('students').doc(id).update({ status: 'inactive', deactivatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  const batch = getDb().batch();
+  batch.update(tenantCol('students').doc(id), { status: 'inactive', deactivatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(-1), _capEventStudentId: id });
+  await batch.commit();
 }
 
 async function reactivateStudent(id) {
   await assertUnderStudentCap();
-  await tenantCol('students').doc(id).update({ status: 'active', deactivatedAt: firebase.firestore.FieldValue.delete() });
+  const batch = getDb().batch();
+  batch.update(tenantCol('students').doc(id), { status: 'active', deactivatedAt: firebase.firestore.FieldValue.delete() });
+  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(1), _capEventStudentId: id });
+  await batch.commit();
 }
 
 async function updateStudentPhoto(studentId, { url, publicId }) {

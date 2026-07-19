@@ -81,6 +81,14 @@ async function bootstrapPage(roles) {
     applyBranding(getTenant());
     preserveTenantLinks(getTenant());
     await enforceBilling(profile, getTenant().id);
+    // Self-heals tenants/{tid}.activeStudentCount on the very next admin page
+    // load if it's ever missing (fresh tenant, or the one-time migration for
+    // tenants that predate this field) — see ensureActiveStudentCountInitialized
+    // in db.js. Best-effort and non-blocking: page load must never hang or
+    // fail because of it.
+    if (profile.role === 'admin') {
+      getTenantSettings().then(t => t && ensureActiveStudentCountInitialized(t)).catch(() => {});
+    }
     return { user, profile, tenant: getTenant() };
   } catch (e) {
     if (!(e instanceof BillingExpiredError)) _showBootstrapError(e);

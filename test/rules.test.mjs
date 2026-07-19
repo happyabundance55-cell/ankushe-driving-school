@@ -247,7 +247,8 @@ const superadmin = 'uidSuperadmin';
 await seed(async (db) => {
   await db.doc(`tenants/${T1}`).set({
     ownerUid: admin1, name: 'Tenant One', plan: 'starter', billingStatus: 'trialing',
-    studentCap: 30, waNotifications: false, referredByTenantId: null, referralCredited: false
+    studentCap: 30, waNotifications: false, referredByTenantId: null, referralCredited: false,
+    activeStudentCount: 0
   });
   await db.doc(`superadmins/${superadmin}`).set({ email: 'super@example.com' });
 });
@@ -337,9 +338,102 @@ await check('a pending student can still read their own record (sees approval st
   await assertSucceeds(db.doc(`tenants/${T1}/students/sidPending`).get());
 });
 
-await check('admin can approve a pending student (flip status to active + assign enrollment no)', async () => {
+await check('admin can approve a pending student when paired with a correct counter bump', async () => {
   const db = testEnv.authenticatedContext(admin1).firestore();
-  await assertSucceeds(db.doc(`tenants/${T1}/students/sidPending`).update({ status: 'active', enrollmentNumber: 'DS-2026-099' }));
+  const batch = db.batch();
+  batch.update(db.doc(`tenants/${T1}/students/sidPending`), { status: 'active', enrollmentNumber: 'DS-2026-099' });
+  batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 1, _capEventStudentId: 'sidPending' });
+  await assertSucceeds(batch.commit());
+});
+
+console.log('\n=== Active-student cap: one-time counter bootstrap ===');
+// T2 has never had activeStudentCount set at all — exercises
+// ensureActiveStudentCountInitialized's self-heal path (auth.js calls this
+// from bootstrapPage on every admin page load).
+
+await check('a tenant with no activeStudentCount field yet can have it set once, alone', async () => {
+  const db = testEnv.authenticatedContext(admin2).firestore();
+  await assertSucceeds(db.doc(`tenants/${T2}`).update({ activeStudentCount: 3 }));
+});
+
+await check('once set, the bootstrap branch never applies again — a second bare set is rejected', async () => {
+  const db = testEnv.authenticatedContext(admin2).firestore();
+  await assertFails(db.doc(`tenants/${T2}`).update({ activeStudentCount: 0 }));
+});
+
+await check('the bootstrap write cannot smuggle in other field changes alongside it', async () => {
+  // .set() (no merge) replaces the whole doc — simplest way to get back to
+  // "activeStudentCount doesn't exist" for this specific check.
+  await seed(async (sdb) => sdb.doc(`tenants/${T2}`).set({ ownerUid: admin2, name: 'Tenant Two' }));
+  const db = testEnv.authenticatedContext(admin2).firestore();
+  await assertFails(db.doc(`tenants/${T2}`).update({ activeStudentCount: 3, name: 'Renamed via loophole' }));
+});
+
+console.log('\n=== Active-student cap: rules-enforced counter consistency ===');
+// T1.activeStudentCount is now 1 (from the approval above), studentCap 30.
+
+await check('activating a student WITHOUT the paired counter bump is rejected', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await seed(async (sdb) => sdb.doc(`tenants/${T1}/students/sidLoophole1`).set({ name: 'X', status: 'pending', enrollmentNumber: '' }));
+  await assertFails(db.doc(`tenants/${T1}/students/sidLoophole1`).update({ status: 'active' }));
+});
+
+await check('bumping the counter WITHOUT a real matching student transition is rejected', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}`).update({ activeStudentCount: 2, _capEventStudentId: 'sidPending' }));
+});
+
+await check('decrementing the counter with _capEventStudentId pointing at a student who is NOT active is rejected', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await seed(async (sdb) => sdb.doc(`tenants/${T1}/students/sidNeverActive`).set({ name: 'Y', status: 'pending', enrollmentNumber: '' }));
+  await assertFails(db.doc(`tenants/${T1}`).update({ activeStudentCount: 0, _capEventStudentId: 'sidNeverActive' }));
+});
+
+await check('a correctly-paired create (new active student + counter bump) succeeds', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  const batch = db.batch();
+  batch.set(db.doc(`tenants/${T1}/students/sidNew1`), { name: 'New One', status: 'active', enrollmentNumber: 'DS-2026-100' });
+  batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 2, _capEventStudentId: 'sidNew1' });
+  await assertSucceeds(batch.commit());
+});
+
+await check('a correctly-paired deactivation (counter -1) succeeds', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  const batch = db.batch();
+  batch.update(db.doc(`tenants/${T1}/students/sidNew1`), { status: 'inactive' });
+  batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 1, _capEventStudentId: 'sidNew1' });
+  await assertSucceeds(batch.commit());
+});
+
+await check('editing an active student\'s unrelated field (no status change) needs no counter involvement', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}/students/sidPending`).update({ name: 'Renamed Student' }));
+});
+
+await check('reactivating past the plan cap is rejected even with a correctly-paired batch', async () => {
+  // Fill T1 to its cap of 30 (currently at 1 active: sidPending).
+  await seed(async (sdb) => {
+    for (let i = 0; i < 29; i++) {
+      await sdb.doc(`tenants/${T1}/students/sidFill${i}`).set({ name: `Fill ${i}`, status: 'active', enrollmentNumber: '' });
+    }
+    await sdb.doc(`tenants/${T1}`).update({ activeStudentCount: 30 });
+    await sdb.doc(`tenants/${T1}/students/sidOverCap`).set({ name: 'Over Cap', status: 'pending', enrollmentNumber: '' });
+  });
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  const batch = db.batch();
+  batch.update(db.doc(`tenants/${T1}/students/sidOverCap`), { status: 'active' });
+  batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 31, _capEventStudentId: 'sidOverCap' });
+  await assertFails(batch.commit());
+});
+
+await check('self-serve signup (status stays pending) still needs no counter involvement at all', async () => {
+  const uid = 'uidPendingStudent2';
+  const phone = '+919666666677';
+  const db = testEnv.authenticatedContext(uid, { phone_number: phone }).firestore();
+  const batch = db.batch();
+  batch.set(db.doc(`tenants/${T1}/students/sidPending2`), { name: 'Pending Two', phone, status: 'pending', enrollmentNumber: '' });
+  batch.set(db.doc(`users/${uid}`), { tenantId: T1, role: 'student', studentId: 'sidPending2', phone });
+  await assertSucceeds(batch.commit());
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

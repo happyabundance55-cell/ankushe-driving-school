@@ -103,17 +103,28 @@ async function ensureActiveStudentCountInitialized(tenant) {
 // upgrade/downgrade — this check must never be stale. This is the
 // fast/friendly client-side check (nice error message before even
 // attempting a write); firestore.rules is the real enforcement.
+//
+// Returns the current count so callers can write the target count+1
+// explicitly rather than using FieldValue.increment() — firestore.rules'
+// getAfter() cross-document checks need to resolve a *sibling* document's
+// pending value, and increment() left that resolution ambiguous enough to
+// fail in production even though plain-number writes (what the rules test
+// suite happened to use) worked fine. Explicit numbers sidestep the question
+// entirely, at the cost of the classic read-then-write race — acceptable
+// here since a stale write just fails the rule's arithmetic check instead of
+// silently corrupting anything (see the tests for this exact behavior).
 async function assertUnderStudentCap() {
   const tenant = await getTenantSettings();
-  if (!tenant) return;
+  if (!tenant) return 0;
   const count = await ensureActiveStudentCountInitialized(tenant);
   if (tenant.studentCap != null && count >= tenant.studentCap) {
     throw new Error(`Student limit reached for your plan (${tenant.studentCap} active students). Upgrade your plan in Billing, or deactivate another student first.`);
   }
+  return count;
 }
 
 async function createStudent(data) {
-  await assertUnderStudentCap();
+  const activeCount = await assertUnderStudentCap();
   const db = getDb();
   const enrollmentNumber = await getNextEnrollmentNumber();
   const phone = normalizePhone(data.phone);
@@ -166,7 +177,7 @@ async function createStudent(data) {
   // from the (unauthenticated) referral-link banner.
   batch.set(tenantCol('referralCodes').doc(enrollmentNumber), { referrerId: ref.id, referrerName: student.name });
   batch.update(tenantRef(), {
-    activeStudentCount: firebase.firestore.FieldValue.increment(1),
+    activeStudentCount: activeCount + 1,
     _capEventStudentId: ref.id
   });
   await batch.commit();
@@ -231,7 +242,7 @@ async function getStudents({ status, search } = {}) {
 // createNewStudentSignup in auth.js), this is also where one finally gets
 // assigned, mirroring createStudent()'s own referralCodes bookkeeping.
 async function approveStudent(id) {
-  await assertUnderStudentCap();
+  const activeCount = await assertUnderStudentCap();
   const existing = await getStudent(id);
   if (!existing) throw new Error('Student not found');
 
@@ -242,7 +253,7 @@ async function approveStudent(id) {
 
   const batch = getDb().batch();
   batch.update(tenantCol('students').doc(id), updates);
-  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(1), _capEventStudentId: id });
+  batch.update(tenantRef(), { activeStudentCount: activeCount + 1, _capEventStudentId: id });
   if (updates.enrollmentNumber) {
     batch.set(tenantCol('referralCodes').doc(updates.enrollmentNumber), { referrerId: id, referrerName: existing.name });
   }
@@ -261,18 +272,18 @@ async function deactivateStudent(id) {
   // create/approve/reactivate, this is the one path that doesn't otherwise
   // call assertUnderStudentCap(), so it has to self-heal on its own.
   const tenant = await getTenantSettings();
-  if (tenant) await ensureActiveStudentCountInitialized(tenant);
+  const activeCount = tenant ? await ensureActiveStudentCountInitialized(tenant) : 0;
   const batch = getDb().batch();
   batch.update(tenantCol('students').doc(id), { status: 'inactive', deactivatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(-1), _capEventStudentId: id });
+  batch.update(tenantRef(), { activeStudentCount: activeCount - 1, _capEventStudentId: id });
   await batch.commit();
 }
 
 async function reactivateStudent(id) {
-  await assertUnderStudentCap();
+  const activeCount = await assertUnderStudentCap();
   const batch = getDb().batch();
   batch.update(tenantCol('students').doc(id), { status: 'active', deactivatedAt: firebase.firestore.FieldValue.delete() });
-  batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(1), _capEventStudentId: id });
+  batch.update(tenantRef(), { activeStudentCount: activeCount + 1, _capEventStudentId: id });
   await batch.commit();
 }
 

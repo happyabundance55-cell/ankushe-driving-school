@@ -7,6 +7,7 @@ import {
   assertSucceeds,
   assertFails
 } from '@firebase/rules-unit-testing';
+import { deleteField } from 'firebase/firestore';
 
 const rules = readFileSync('firestore.rules', 'utf8');
 
@@ -369,6 +370,19 @@ await check('the bootstrap write cannot smuggle in other field changes alongside
   await assertFails(db.doc(`tenants/${T2}`).update({ activeStudentCount: 3, name: 'Renamed via loophole' }));
 });
 
+await check('a tenant that has NEVER had studentCap set at all (pre-billing-feature tenant) can still activate a student', async () => {
+  // T2 has no studentCap key whatsoever — not null, genuinely absent —
+  // simulating a real tenant created before this feature existed. Every
+  // .get('studentCap', null) fallback in the rules is what's being proven
+  // here; dot-access (.studentCap) would throw an evaluation error instead.
+  await seed(async (sdb) => sdb.doc(`tenants/${T2}`).update({ activeStudentCount: 0 }));
+  const db = testEnv.authenticatedContext(admin2).firestore();
+  const batch = db.batch();
+  batch.set(db.doc(`tenants/${T2}/students/sidNoCap`), { name: 'No Cap', status: 'active', enrollmentNumber: 'X-001' });
+  batch.update(db.doc(`tenants/${T2}`), { activeStudentCount: 1, _capEventStudentId: 'sidNoCap' });
+  await assertSucceeds(batch.commit());
+});
+
 console.log('\n=== Active-student cap: rules-enforced counter consistency ===');
 // T1.activeStudentCount is now 1 (from the approval above), studentCap 30.
 
@@ -400,8 +414,20 @@ await check('a correctly-paired create (new active student + counter bump) succe
 await check('a correctly-paired deactivation (counter -1) succeeds', async () => {
   const db = testEnv.authenticatedContext(admin1).firestore();
   const batch = db.batch();
-  batch.update(db.doc(`tenants/${T1}/students/sidNew1`), { status: 'inactive' });
+  // Exact write shape of the real deactivateStudent() in db.js, including
+  // the deactivatedAt timestamp it sets (not just status).
+  batch.update(db.doc(`tenants/${T1}/students/sidNew1`), { status: 'inactive', deactivatedAt: new Date() });
   batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 1, _capEventStudentId: 'sidNew1' });
+  await assertSucceeds(batch.commit());
+});
+
+await check('reactivating that SAME student right after (the exact real-world round trip) succeeds', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  const batch = db.batch();
+  // Exact write shape of the real reactivateStudent() in db.js, including
+  // deleteField() on deactivatedAt (not just flipping status back).
+  batch.update(db.doc(`tenants/${T1}/students/sidNew1`), { status: 'active', deactivatedAt: deleteField() });
+  batch.update(db.doc(`tenants/${T1}`), { activeStudentCount: 2, _capEventStudentId: 'sidNew1' });
   await assertSucceeds(batch.commit());
 });
 

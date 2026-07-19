@@ -57,30 +57,37 @@ service cloud.firestore {
     // exercises automatically on the tenant's very next admin page load.
 
     // From the student doc's side: a brand-new doc starting life as 'active'.
+    // .get(key, default) everywhere below, not dot-access — a tenant created
+    // before this feature existed (or before billing settled studentCap via
+    // the Worker) may genuinely be missing these keys rather than having
+    // them set to null, and dot-access on an absent map key is an
+    // evaluation error (denies the whole write), not a graceful null/false.
+    // Already been bitten by this once for student.status; not leaving the
+    // same class of bug in the tenant-doc fields too.
     function studentCapRespectedOnCreate(tid) {
       return request.resource.data.get('status', null) != 'active' || (
-        getAfter(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount
-          == get(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount + 1
-        && (get(/databases/$(database)/documents/tenants/$(tid)).data.studentCap == null
-            || getAfter(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount
-                 <= get(/databases/$(database)/documents/tenants/$(tid)).data.studentCap)
+        getAfter(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0)
+          == get(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0) + 1
+        && (get(/databases/$(database)/documents/tenants/$(tid)).data.get('studentCap', null) == null
+            || getAfter(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0)
+                 <= get(/databases/$(database)/documents/tenants/$(tid)).data.get('studentCap', null))
       );
     }
 
     // From the student doc's side: an existing doc transitioning to/from 'active'.
     function studentCapRespectedOnUpdate(tid) {
-      return (resource.data.status == 'active') == (request.resource.data.status == 'active') || (
-        resource.data.status != 'active' && request.resource.data.status == 'active' && (
-          getAfter(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount
-            == get(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount + 1
-          && (get(/databases/$(database)/documents/tenants/$(tid)).data.studentCap == null
-              || getAfter(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount
-                   <= get(/databases/$(database)/documents/tenants/$(tid)).data.studentCap)
+      return (resource.data.get('status', null) == 'active') == (request.resource.data.get('status', null) == 'active') || (
+        resource.data.get('status', null) != 'active' && request.resource.data.get('status', null) == 'active' && (
+          getAfter(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0)
+            == get(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0) + 1
+          && (get(/databases/$(database)/documents/tenants/$(tid)).data.get('studentCap', null) == null
+              || getAfter(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0)
+                   <= get(/databases/$(database)/documents/tenants/$(tid)).data.get('studentCap', null))
         )
       ) || (
-        resource.data.status == 'active' && request.resource.data.status != 'active'
-          && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount
-               == get(/databases/$(database)/documents/tenants/$(tid)).data.activeStudentCount - 1
+        resource.data.get('status', null) == 'active' && request.resource.data.get('status', null) != 'active'
+          && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0)
+               == get(/databases/$(database)/documents/tenants/$(tid)).data.get('activeStudentCount', 0) - 1
       );
     }
 
@@ -90,7 +97,7 @@ service cloud.firestore {
     // could decrement with no real deactivation, bank that fake headroom,
     // then legitimately activate an extra real student later.
     function activeStudentCountChangeVerified(tid) {
-      return resource.data.activeStudentCount == request.resource.data.activeStudentCount || (
+      return resource.data.get('activeStudentCount', null) == request.resource.data.get('activeStudentCount', null) || (
         // One-time bootstrap: the field has never existed on this tenant
         // before (see ensureActiveStudentCountInitialized in db.js, called
         // from bootstrapPage on every admin page load) — nothing to verify
@@ -104,18 +111,18 @@ service cloud.firestore {
           && request.resource.data.activeStudentCount is int
           && request.resource.data.activeStudentCount >= 0)
       ) || (
-        request.resource.data.activeStudentCount == resource.data.activeStudentCount + 1
+        request.resource.data.get('activeStudentCount', 0) == resource.data.get('activeStudentCount', 0) + 1
           // The referenced student may not exist yet before this batch — a
           // brand-new student created directly as 'active' (createStudent())
           // is exactly that case, not just a pending->active transition.
           && (!exists(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId))
-              || get(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.status != 'active')
-          && getAfter(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.status == 'active'
-          && (resource.data.studentCap == null || request.resource.data.activeStudentCount <= resource.data.studentCap)
+              || get(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.get('status', null) != 'active')
+          && getAfter(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.get('status', null) == 'active'
+          && (resource.data.get('studentCap', null) == null || request.resource.data.get('activeStudentCount', 0) <= resource.data.get('studentCap', null))
       ) || (
-        request.resource.data.activeStudentCount == resource.data.activeStudentCount - 1
-          && get(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.status == 'active'
-          && getAfter(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.status != 'active'
+        request.resource.data.get('activeStudentCount', 0) == resource.data.get('activeStudentCount', 0) - 1
+          && get(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.get('status', null) == 'active'
+          && getAfter(/databases/$(database)/documents/tenants/$(tid)/students/$(request.resource.data._capEventStudentId)).data.get('status', null) != 'active'
       );
     }
 

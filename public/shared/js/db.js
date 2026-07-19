@@ -88,13 +88,11 @@ async function ensureActiveStudentCountInitialized(tenant) {
   // students per school) reading the actual docs costs nothing meaningful.
   const snap = await tenantCol('students').where('status', '==', 'active').get();
   const count = snap.size;
-  // Best-effort: under the OLD (pre-counter) rules this always succeeds; once
-  // the counter-verifying rules are live, a first-time set with no prior
-  // value falls through to activeStudentCountChangeVerified()'s no-op branch
-  // only if count is unchanged, so this must run (and succeed) before that
-  // deploy for any tenant that already has active students — see the
-  // migration note in firestore.rules.
-  await tenantRef().update({ activeStudentCount: count }).catch(() => {});
+  // Best-effort persist — if this fails, the returned count is still correct
+  // for THIS call's own cap check, but logged (not silently swallowed) since
+  // a persistent failure here means every subsequent action keeps hitting
+  // the same "not initialized yet" wall.
+  await tenantRef().update({ activeStudentCount: count }).catch(e => console.error('activeStudentCount init failed:', e));
   return count;
 }
 

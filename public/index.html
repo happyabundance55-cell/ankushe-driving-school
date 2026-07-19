@@ -51,7 +51,8 @@
     }
     :root[data-theme="dark"] .lp-nav-wrap { background: rgba(10,9,8,.82); border-bottom-color: rgba(255,255,255,.07); }
     .lp-nav { display: flex; align-items: center; justify-content: space-between; max-width: 1080px; margin: 0 auto; padding: .9rem 1.5rem; }
-    .lp-nav .brand { font-size: 1.1rem; font-weight: 800; letter-spacing: -.02em; color: var(--text); }
+    .lp-nav .brand { display: flex; align-items: center; gap: .45rem; font-size: 1.1rem; font-weight: 800; letter-spacing: -.02em; color: var(--text); }
+    .lp-nav .brand-icon { width: 21px; height: 21px; flex-shrink: 0; color: var(--primary); }
     .lp-nav .actions { display: flex; align-items: center; gap: 1.1rem; }
     .lp-nav a.login-link { font-size: .87rem; font-weight: 600; color: var(--text-muted); text-decoration: none; }
     .lp-nav a.login-link:hover { color: var(--primary); }
@@ -207,7 +208,16 @@
 
 <div class="lp-nav-wrap">
   <nav class="lp-nav">
-    <div class="brand">🚗 Sarathi</div>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="8.2"/>
+        <circle cx="12" cy="12" r="2.5"/>
+        <line x1="12" y1="9.7" x2="12" y2="4.4"/>
+        <line x1="14.3" y1="13.6" x2="19.4" y2="16.7"/>
+        <line x1="9.7" y1="13.6" x2="4.6" y2="16.7"/>
+      </svg>
+      Sarathi
+    </div>
     <div class="actions">
       <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>

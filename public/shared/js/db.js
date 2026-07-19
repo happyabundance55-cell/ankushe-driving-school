@@ -57,7 +57,30 @@ async function getNextEnrollmentNumber() {
 
 // ─── Students ─────────────────────────────────────────────────────────────────
 
+// Counts only status:'active' — pending/inactive students aren't using real
+// capacity, matching the plan's "N active students" promise (not a lifetime
+// cap on students ever created). Reads the plan cap fresh from Firestore
+// rather than tenant.js's cached copy, which can lag up to 5 min after a
+// plan upgrade/downgrade — this check must never be stale.
+//
+// Wired into every path that can set a student's status to 'active'
+// (createStudent, approveStudent, reactivateStudent) — none of them, so
+// there's no path around it. Deliberately not wrapped in a transaction: the
+// only way to hit the TOCTOU race this leaves open is two admin clicks
+// landing within the same tens-of-milliseconds window, which given this is
+// a single admin clicking buttons in a browser (no bulk/scripted approval
+// path exists) isn't worth the complexity of a counter-based rewrite.
+async function assertUnderStudentCap() {
+  const tenant = await getTenantSettings();
+  if (!tenant || tenant.studentCap == null) return;
+  const snap = await tenantCol('students').where('status', '==', 'active').count().get();
+  if (snap.data().count >= tenant.studentCap) {
+    throw new Error(`Student limit reached for your plan (${tenant.studentCap} active students). Upgrade your plan in Billing, or deactivate another student first.`);
+  }
+}
+
 async function createStudent(data) {
+  await assertUnderStudentCap();
   const db = getDb();
   const enrollmentNumber = await getNextEnrollmentNumber();
   const phone = normalizePhone(data.phone);
@@ -171,6 +194,7 @@ async function getStudents({ status, search } = {}) {
 // createNewStudentSignup in auth.js), this is also where one finally gets
 // assigned, mirroring createStudent()'s own referralCodes bookkeeping.
 async function approveStudent(id) {
+  await assertUnderStudentCap();
   const existing = await getStudent(id);
   if (!existing) throw new Error('Student not found');
 
@@ -184,6 +208,20 @@ async function approveStudent(id) {
     await tenantCol('referralCodes').doc(updates.enrollmentNumber).set({ referrerId: id, referrerName: existing.name });
   }
   return updates;
+}
+
+// Deactivating is always allowed — a school can always stop counting a
+// student against its plan. Reactivating is the mirror of approveStudent():
+// it goes through the exact same cap check, so cycling a student
+// inactive/active can free a slot for someone else, but can never result in
+// more concurrently-active students than the plan allows.
+async function deactivateStudent(id) {
+  await tenantCol('students').doc(id).update({ status: 'inactive', deactivatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+}
+
+async function reactivateStudent(id) {
+  await assertUnderStudentCap();
+  await tenantCol('students').doc(id).update({ status: 'active', deactivatedAt: firebase.firestore.FieldValue.delete() });
 }
 
 async function updateStudentPhoto(studentId, { url, publicId }) {

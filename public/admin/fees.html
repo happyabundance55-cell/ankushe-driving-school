@@ -234,7 +234,10 @@ async function loadStudentFees(id) {
   const balEl = document.getElementById('fee-balance');
   balEl.textContent = formatCurrency(s.balance);
   balEl.style.color = s.balance > 0 ? 'var(--danger)' : 'var(--success)';
-  document.getElementById('pay-card').style.display = s.balance > 0 ? '' : 'none';
+  // Also hidden for an inactive student — same reasoning as the
+  // attendance/driving-test pickers: no recording new activity for someone
+  // the school has deactivated without reactivating them first.
+  document.getElementById('pay-card').style.display = (s.balance > 0 && s.status === 'active') ? '' : 'none';
   document.getElementById('new-total-fee').value = s.totalFee / 100;
   await Promise.all([ loadPaymentHistory(id), loadAdjustmentHistory(id) ]);
 }

@@ -280,12 +280,17 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.add('active');
 }
 
+// mark-student (marking a NEW attendance) only lists active students — an
+// inactive student shouldn't be usable without reactivating first, or
+// deactivating would be a no-op way to dodge the plan's student cap.
+// filter-student (searching past records) keeps everyone, since looking up
+// an inactive/graduated student's history is still legitimate.
 function populateStudentDropdowns(students) {
-  ['mark-student','filter-student'].forEach(id => {
+  const activeStudents = students.filter(s => s.status === 'active');
+  [['mark-student', activeStudents, '— Select Student —'], ['filter-student', students, 'All Students']].forEach(([id, list, placeholder]) => {
     const sel = document.getElementById(id);
-    const isFilter = id === 'filter-student';
-    sel.innerHTML = `<option value="">${isFilter ? 'All Students' : '— Select Student —'}</option>`;
-    students.forEach(s => {
+    sel.innerHTML = `<option value="">${placeholder}</option>`;
+    list.forEach(s => {
       sel.appendChild(Object.assign(document.createElement('option'), { value: s.id, textContent: `${s.name} (${s.enrollmentNumber})` }));
     });
   });

@@ -274,16 +274,13 @@ async function linkMentorInvite(uid, phoneE164, name, joiningDate) {
 // action flips this to 'active' and assigns the enrollment number). This
 // keeps unapproved signups out of the school's normal active roster and
 // off any status:'active' filtered query.
+// No student-cap check here on purpose — a pending signup isn't using real
+// capacity yet (see status:'pending' below), so there's nothing to enforce
+// until the school actually approves them. That's where db.js's
+// assertUnderStudentCap() runs instead (see approveStudent()).
 async function createNewStudentSignup(uid, phoneE164, { name, address, dob }) {
   const db     = firebase.firestore();
   const tenant = getTenant();
-
-  if (tenant.studentCap != null) {
-    const countSnap = await db.collection('tenants').doc(tenant.id).collection('students').count().get();
-    if (countSnap.data().count >= tenant.studentCap) {
-      throw new Error('This school has reached its student limit. Contact the school directly to enroll.');
-    }
-  }
 
   const studentRef = db.collection('tenants').doc(tenant.id).collection('students').doc();
 

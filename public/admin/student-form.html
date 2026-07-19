@@ -589,9 +589,11 @@ async function submitForm(e) {
       totalFee,
       paidFee,
       photoURL,
-      photoPublicId,
-      status: 'active'
+      photoPublicId
     };
+    // status is deliberately NOT set here — it must never be silently
+    // reasserted to 'active' by a routine edit (see deactivateStudent() in
+    // db.js). New students are created active by createStudent() itself.
 
     if (studentId) {
       if (photoFile) {
@@ -609,14 +611,8 @@ async function submitForm(e) {
       setTimeout(() => window.location.href = tenantUrl('student-profile.html', { id: studentId }), 800);
 
     } else {
-      const cap = getTenant().studentCap;
-      if (cap != null) {
-        const countSnap = await tenantCol('students').count().get();
-        if (countSnap.data().count >= cap) {
-          throw new Error(`Student limit reached for your plan (${cap}). Upgrade your plan in Billing to add more.`);
-        }
-      }
-
+      // Cap is enforced inside createStudent() itself now (db.js) — the one
+      // place that can never be bypassed by a different call site.
       const student = await createStudent(data);
 
       const referrerId   = document.getElementById('referrer-id').value;

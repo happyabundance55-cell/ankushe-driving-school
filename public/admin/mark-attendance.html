@@ -152,7 +152,9 @@ bootstrapPage(['mentor']).then(async ({ profile }) => {
     }
   } catch { /* non-critical */ }
 
-  const students = await getStudents({ status: 'all' });
+  // Active only — an inactive student shouldn't be markable without
+  // reactivating first (which re-checks the plan's student cap).
+  const students = await getStudents({ status: 'active' });
   const sel = document.getElementById('mark-student');
   students.forEach(s => {
     const opt = document.createElement('option');

@@ -590,7 +590,10 @@ function _initTomSelects() {
     }
   });
 
-  const modalOpts = _students.map(s => ({
+  // Scheduling a NEW test only offers active students — same reasoning as
+  // attendance.html's mark-student: an inactive student shouldn't be usable
+  // without reactivating first (which re-checks the plan's student cap).
+  const modalOpts = _students.filter(s => s.status === 'active').map(s => ({
     value: s.id,
     text:  `${s.name} (${s.enrollmentNumber})`
   }));
@@ -694,6 +697,13 @@ function editTest(id) {
   if (!t) return;
   _editingId = id;
   document.getElementById('modal-heading').textContent = 'Edit Driving Test';
+  // The student may have gone inactive since this test was scheduled — the
+  // picker's options no longer include them (see _initTomSelects), so make
+  // sure their name still shows correctly on an edit even though the field
+  // is about to be disabled anyway (you can't reassign a test's student).
+  if (!tsStudent.options[t.studentId]) {
+    tsStudent.addOption({ value: t.studentId, text: `${t.studentName} (${t.enrollmentNumber || ''})` });
+  }
   tsStudent.setValue(t.studentId);
   tsStudent.disable();
   _dtSetValue(t.scheduledAt ? _localDateTimeValue(t.scheduledAt) : '');

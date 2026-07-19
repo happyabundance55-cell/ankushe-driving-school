@@ -85,6 +85,21 @@ bootstrapPage(['admin']).then(async () => {
   renderProfile(student, payments, attendance);
 });
 
+async function toggleStudentActive(id, activate) {
+  const verb = activate ? 'reactivate' : 'deactivate';
+  if (!confirm(`${activate ? 'Reactivate' : 'Deactivate'} this student?${activate ? '' : ' They will no longer be selectable for attendance or fee payments until reactivated.'}`)) return;
+  try {
+    await (activate ? reactivateStudent(id) : deactivateStudent(id));
+    showToast(`Student ${verb}d.`, 'success');
+    const [student, payments, attendance] = await Promise.all([
+      getStudent(id), getStudentPayments(id), getStudentAttendance(id)
+    ]);
+    renderProfile(student, payments, attendance);
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
+
 function renderProfile(s, payments, attendance) {
   const balColor = s.balance > 0 ? 'var(--danger)' : 'var(--success)';
   document.title = `${s.name} — ${getTenant().name || 'Sarathi'}`;
@@ -113,6 +128,11 @@ function renderProfile(s, payments, attendance) {
         <a href="${tenantUrl('form14.html', { id: s.id })}" target="_blank" class="btn btn-outline">Form 14</a>
         <a href="${tenantUrl('form15.html', { id: s.id })}" target="_blank" class="btn btn-outline">Form 15</a>
         <a href="${tenantUrl('student-form.html', { id: s.id })}" class="btn btn-outline">Edit</a>
+        ${s.status === 'active'
+          ? `<button type="button" class="btn btn-outline" onclick="toggleStudentActive('${s.id}', false)">Deactivate</button>`
+          : s.status === 'inactive'
+            ? `<button type="button" class="btn btn-outline" onclick="toggleStudentActive('${s.id}', true)">Reactivate</button>`
+            : ''}
         <a href="${tenantUrl('students.html')}" class="btn btn-outline">← Back</a>
       </div>
     </div>

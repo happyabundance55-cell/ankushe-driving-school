@@ -252,6 +252,12 @@ async function approveStudent(id) {
 // inactive/active can free a slot for someone else, but can never result in
 // more concurrently-active students than the plan allows.
 async function deactivateStudent(id) {
+  // No cap check needed here (deactivating is always allowed), but the
+  // counter still needs to actually exist before decrementing it — unlike
+  // create/approve/reactivate, this is the one path that doesn't otherwise
+  // call assertUnderStudentCap(), so it has to self-heal on its own.
+  const tenant = await getTenantSettings();
+  if (tenant) await ensureActiveStudentCountInitialized(tenant);
   const batch = getDb().batch();
   batch.update(tenantCol('students').doc(id), { status: 'inactive', deactivatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   batch.update(tenantRef(), { activeStudentCount: firebase.firestore.FieldValue.increment(-1), _capEventStudentId: id });

@@ -320,6 +320,7 @@ let editingStudent = null;
 let _tsVehicleClass = null;
 let _tsDLAuthority  = null;
 let _tsVehicleRegNo = null;
+let _tsRelation     = null;
 
 bootstrapPage(['admin']).then(async () => {
   document.getElementById('enrollment-date').value = todayISO();
@@ -340,6 +341,11 @@ bootstrapPage(['admin']).then(async () => {
   _tsVehicleClass = new TomSelect('#vehicle-class', {
     placeholder: '— Select Class —',
     allowEmptyOption: true, create: false, maxOptions: null,
+  });
+
+  // Fixed 4-item list, already in the HTML — no search box needed.
+  _tsRelation = new TomSelect('#relation', {
+    allowEmptyOption: true, create: false, controlInput: null,
   });
 
   const dlaSel = document.getElementById('dl-authority');
@@ -396,7 +402,7 @@ function populateForm(s) {
   document.getElementById('name').value              = s.name;
   document.getElementById('phone').value             = s.phone.replace(/^\+91/, '');
   document.getElementById('dob').value               = s.dob || '';
-  document.getElementById('relation').value          = s.relation || '';
+  if (_tsRelation && s.relation) _tsRelation.setValue(s.relation);
   document.getElementById('guardian-name').value     = s.guardianName || '';
   document.getElementById('guardian-phone').value    = (s.guardianPhone || '').replace(/^\+91/, '');
   document.getElementById('address-flat').value      = s.addressFlat || s.address || '';

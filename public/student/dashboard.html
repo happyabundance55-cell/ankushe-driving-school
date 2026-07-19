@@ -159,6 +159,8 @@ bootstrapPage(['student']).then(async ({ profile }) => {
   document.getElementById('root').innerHTML = `
     <div class="page-title">${heading}</div>
 
+    ${student.status === 'pending' ? '<div class="alert alert-warning" style="margin-bottom:1rem">Your profile is waiting for the school to approve it. You\'ll be able to sign attendance once approved.</div>' : ''}
+
     ${isNew ? '<div class="alert alert-info" style="margin-bottom:1rem">Fill in your details below and tap Save.</div>' : ''}
 
     ${!isNew ? renderReadOnlyProfile() : `<form id="profile-form" onsubmit="saveProfile(event)">

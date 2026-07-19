@@ -80,11 +80,85 @@ async function bootstrapPage(roles) {
     const { user, profile } = await requireAuth(roles);
     applyBranding(getTenant());
     preserveTenantLinks(getTenant());
+    await enforceBilling(profile, getTenant().id);
     return { user, profile, tenant: getTenant() };
   } catch (e) {
-    _showBootstrapError(e);
+    if (!(e instanceof BillingExpiredError)) _showBootstrapError(e);
     throw e;
   }
+}
+
+// ─── Billing gate ────────────────────────────────────────────────────────────
+// Trial/subscription enforcement. billingStatus/trialEndsAt/currentPeriodEnd
+// on tenants/{tid} are written only by the Cloudflare Worker (after a
+// verified Cashfree payment) or a superadmin — never by the tenant admin's
+// own client (see firestore.rules billingKeysUnchanged()) — so this check
+// can't be defeated by a school editing its own tenant doc.
+//
+// Reads the tenant doc fresh (not the branding/name cache in tenant.js,
+// whose sessionStorage round-trip drops Timestamp fields) so the gate is
+// never stale by more than one page load.
+
+const BILLING_REMINDER_DAYS = 3;
+
+class BillingExpiredError extends Error {}
+
+function _billingState(billing) {
+  const now = Date.now();
+  const trialEndsAtMs = billing.trialEndsAt ? billing.trialEndsAt.toMillis() : null;
+  const periodEndMs   = billing.currentPeriodEnd ? billing.currentPeriodEnd.toMillis() : null;
+
+  let expired = billing.billingStatus === 'expired';
+  if (billing.billingStatus === 'trialing' && trialEndsAtMs != null && now > trialEndsAtMs) expired = true;
+  if (billing.billingStatus === 'active' && periodEndMs != null && now > periodEndMs) expired = true;
+
+  const deadlineMs = billing.billingStatus === 'trialing' ? trialEndsAtMs : periodEndMs;
+  const daysLeft = (!expired && deadlineMs != null) ? Math.ceil((deadlineMs - now) / 86400000) : null;
+
+  return { expired, daysLeft };
+}
+
+async function enforceBilling(profile, tenantId) {
+  const snap = await getDb().collection('tenants').doc(tenantId).get();
+  const billing = snap.data() || {};
+  const { expired, daysLeft } = _billingState(billing);
+
+  if (expired) {
+    if (profile.role === 'admin') {
+      if (!window.location.pathname.endsWith('/admin/billing.html')) {
+        window.location.href = tenantUrl('/admin/billing.html');
+        throw new BillingExpiredError('Redirecting to billing.');
+      }
+      return; // already on the billing/renew page — let it render normally
+    }
+    _showExpiredOverlay();
+    throw new BillingExpiredError('Subscription expired.');
+  }
+
+  if (profile.role === 'admin' && daysLeft != null && daysLeft <= BILLING_REMINDER_DAYS) {
+    const flagKey = 'sarathi_billing_reminder_' + tenantId + '_' + new Date().toDateString();
+    if (!sessionStorage.getItem(flagKey)) {
+      sessionStorage.setItem(flagKey, '1');
+      const what = billing.billingStatus === 'trialing' ? 'trial' : 'plan';
+      const msg = daysLeft <= 0
+        ? `Your ${what} ends today — renew any time from Billing.`
+        : `Your ${what} ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — renew any time from Billing.`;
+      showToast(msg, 'info');
+    }
+  }
+}
+
+function _showExpiredOverlay() {
+  if (document.getElementById('billing-expired-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'billing-expired-overlay';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.75);' +
+    'display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center';
+  el.innerHTML = '<div style="background:var(--card-bg,#fff);color:var(--text,#111);padding:2rem;' +
+    'border-radius:12px;max-width:360px;font:1rem/1.5 system-ui,sans-serif">' +
+    '<h2 style="margin:0 0 .5rem">Subscription expired</h2>' +
+    '<p style="margin:0">This school’s Sarathi subscription has expired. Ask your school admin to renew to continue.</p></div>';
+  document.body.appendChild(el);
 }
 
 function _showBootstrapError(e) {
@@ -194,9 +268,23 @@ async function linkMentorInvite(uid, phoneE164, name, joiningDate) {
 // original app's behavior: enrollment number stays blank until an admin
 // formally processes the enrollment later — the counter is staff-only by
 // rule, so a fresh anonymous signup deliberately can't touch it.
+//
+// Created as status 'pending', not 'active' — a self-created profile isn't
+// a real student until the school approves it (students.html's Approve
+// action flips this to 'active' and assigns the enrollment number). This
+// keeps unapproved signups out of the school's normal active roster and
+// off any status:'active' filtered query.
 async function createNewStudentSignup(uid, phoneE164, { name, address, dob }) {
   const db     = firebase.firestore();
   const tenant = getTenant();
+
+  if (tenant.studentCap != null) {
+    const countSnap = await db.collection('tenants').doc(tenant.id).collection('students').count().get();
+    if (countSnap.data().count >= tenant.studentCap) {
+      throw new Error('This school has reached its student limit. Contact the school directly to enroll.');
+    }
+  }
+
   const studentRef = db.collection('tenants').doc(tenant.id).collection('students').doc();
 
   const batch = db.batch();
@@ -205,7 +293,7 @@ async function createNewStudentSignup(uid, phoneE164, { name, address, dob }) {
     enrollmentNumber: '', enrollmentDate: firebase.firestore.Timestamp.now(),
     photoURL: '', photoPublicId: '',
     totalFee: 0, paidFee: 0, balance: 0,
-    referredBy: null, referralApplied: false, status: 'active',
+    referredBy: null, referralApplied: false, status: 'pending',
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   batch.set(db.collection('tenants').doc(tenant.id).collection('studentsByPhone').doc(phoneE164), {

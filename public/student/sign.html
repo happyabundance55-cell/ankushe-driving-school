@@ -170,6 +170,13 @@ bootstrapPage(['student']).then(async ({ profile }) => {
     return;
   }
 
+  if (_student.status === 'pending') {
+    document.getElementById('sign-error').textContent = 'Your profile is still waiting for school approval — you can sign attendance once approved.';
+    document.getElementById('sign-error').style.display = '';
+    document.getElementById('submit-btn').disabled = true;
+    return;
+  }
+
   document.getElementById('student-label').textContent =
     `${_student.name} — ${_student.enrollmentNumber}`;
 

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Billing — Sarathi</title>
+  <link rel="stylesheet" href="../shared/css/main.css">
+  <style>
+    .nav-logo-img { width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.22); }
+    .billing-status-badge { display:inline-block;padding:.2rem .65rem;border-radius:999px;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em; }
+    .billing-status-badge.trialing { background:rgba(224,160,32,.16);color:#c47c05; }
+    .billing-status-badge.active { background:rgba(34,150,80,.16);color:#1c7a44; }
+    .billing-status-badge.expired { background:rgba(200,50,50,.16);color:#b3261e; }
+    .plan-pick { display:flex;gap:.75rem;flex-wrap:wrap;margin:.85rem 0 1.1rem; }
+    .plan-pick-card { flex:1;min-width:140px;border:2px solid var(--border);border-radius:var(--radius-sm);padding:.85rem;cursor:pointer;transition:border-color .15s; }
+    .plan-pick-card.selected { border-color:var(--primary);background:var(--primary-light); }
+    .plan-pick-card .pp-name { font-weight:700;font-size:.9rem; }
+    .plan-pick-card .pp-price { font-size:1.1rem;font-weight:800;margin:.2rem 0; }
+    .plan-pick-card .pp-cap { font-size:.76rem;color:var(--text-muted); }
+    .referral-link-row { display:flex;gap:.5rem;align-items:center;margin-top:.6rem; }
+    .referral-link-row input { flex:1;font-size:.8rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.55rem .7rem;color:var(--text); }
+    .payout-row { display:flex;justify-content:space-between;align-items:center;padding:.55rem .9rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:.4rem;font-size:.85rem; }
+    .payout-row .status-pending { color:#c47c05;font-weight:700; }
+    .payout-row .status-paid { color:#1c7a44;font-weight:700; }
+  </style>
+  <script src="../shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+  <script src="../shared/js/tenant.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/db.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <script src="../shared/js/plans.js"></script>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="dashboard.html"><img class="nav-logo-img" src="/favicon.svg" alt="Sarathi" onerror="this.style.display='none'"> Sarathi</a>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="nav-overlay" onclick="closeNav()"></div>
+  <ul class="navbar-links">
+    <li><a href="dashboard.html">Dashboard</a></li>
+    <li><a href="students.html">Students</a></li>
+    <li><a href="mentors.html">Instructors</a></li>
+    <li><a href="attendance.html">Attendance</a></li>
+    <li><a href="driving-tests.html">Tests</a></li>
+    <li><a href="fees.html">Fees</a></li>
+    <li><a href="referrals.html">Referrals</a></li>
+    <li><a href="masters.html">Masters</a></li>
+    <li><a href="billing.html" class="active">Billing</a></li>
+    <li><a href="#" class="nav-logout" onclick="logout();return false">Logout</a></li>
+    <li>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </li>
+  </ul>
+</nav>
+
+<div class="page-container" style="max-width:640px">
+  <div class="page-title">Billing</div>
+
+  <div class="card">
+    <div class="card-title">Your plan</div>
+    <div id="status-loading" class="loading"><div class="spinner"></div></div>
+    <div id="status-block" style="display:none">
+      <p style="margin:0 0 .3rem">
+        <span id="status-badge" class="billing-status-badge"></span>
+        <strong id="status-plan-name" style="margin-left:.4rem"></strong>
+      </p>
+      <p id="status-detail" style="font-size:.85rem;color:var(--text-muted);margin:0"></p>
+    </div>
+
+    <div id="pay-error" class="alert alert-danger" style="display:none;margin-top:1rem"></div>
+
+    <div class="plan-pick" id="plan-pick"></div>
+
+    <div class="form-group">
+      <label>Mobile number (for the payment receipt)</label>
+      <input type="tel" id="pay-phone" placeholder="10-digit mobile number" maxlength="10">
+    </div>
+
+    <button class="btn btn-primary" id="pay-btn" onclick="startPayment()" style="width:100%">
+      Pay <span id="pay-amount"></span> now
+    </button>
+    <p style="font-size:.72rem;color:var(--text-muted);margin-top:.6rem">
+      Sarathi is billed manually, month to month — no card is saved and nothing renews automatically.
+      Come back here to pay again when your period ends.
+    </p>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Refer another school</div>
+    <p style="font-size:.82rem;color:var(--text-muted);margin:0">
+      Share your link. When a school that signs up through it makes its first payment, you get ₹300 credited.
+    </p>
+    <div class="referral-link-row">
+      <input type="text" id="referral-link" readonly>
+      <button class="btn btn-outline btn-sm" onclick="copyReferralLink()">Copy</button>
+    </div>
+    <div id="payout-list" style="margin-top:.85rem"></div>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Payment history</div>
+    <div id="payment-history"><p style="font-size:.85rem;color:var(--text-muted);margin:0">No payments yet.</p></div>
+  </div>
+</div>
+
+<script>
+const WORKER_URL = 'https://sarathi-cashfree.happyabundance55.workers.dev';
+let cashfree = null;
+let _tenant = null;
+let _selectedPlan = null;
+
+function fmtRupees(paise) { return '₹' + (paise / 100).toLocaleString('en-IN'); }
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderPlanPicker() {
+  const el = document.getElementById('plan-pick');
+  el.innerHTML = '';
+  Object.keys(PLANS).forEach(key => {
+    const p = PLANS[key];
+    const card = document.createElement('div');
+    card.className = 'plan-pick-card' + (key === _selectedPlan ? ' selected' : '');
+    card.onclick = () => { _selectedPlan = key; renderPlanPicker(); updatePayAmount(); };
+    card.innerHTML = `<div class="pp-name">${p.name}</div><div class="pp-price">${fmtRupees(p.pricePaise)}</div>
+      <div class="pp-cap">${p.studentCap ? 'Up to ' + p.studentCap + ' students' : 'Unlimited students'}</div>`;
+    el.appendChild(card);
+  });
+}
+
+function updatePayAmount() {
+  document.getElementById('pay-amount').textContent = fmtRupees(PLANS[_selectedPlan].pricePaise);
+}
+
+function renderStatus(tenant) {
+  const badge = document.getElementById('status-badge');
+  const now = Date.now();
+  let status = tenant.billingStatus || 'trialing';
+  const trialEndsAtMs = tenant.trialEndsAt ? tenant.trialEndsAt.toMillis() : null;
+  const periodEndMs = tenant.currentPeriodEnd ? tenant.currentPeriodEnd.toMillis() : null;
+  if (status === 'trialing' && trialEndsAtMs && now > trialEndsAtMs) status = 'expired';
+  if (status === 'active' && periodEndMs && now > periodEndMs) status = 'expired';
+
+  badge.className = 'billing-status-badge ' + status;
+  badge.textContent = status === 'trialing' ? 'Free trial' : status;
+  document.getElementById('status-plan-name').textContent = PLANS[tenant.plan] ? PLANS[tenant.plan].name : 'Starter';
+
+  const detail = document.getElementById('status-detail');
+  if (status === 'trialing') {
+    detail.textContent = trialEndsAtMs ? `Trial ends ${fmtDate(tenant.trialEndsAt)}.` : '';
+  } else if (status === 'active') {
+    detail.textContent = periodEndMs ? `Renews ${fmtDate(tenant.currentPeriodEnd)}.` : '';
+  } else {
+    detail.textContent = 'Pay to restore access.';
+  }
+  document.getElementById('status-loading').style.display = 'none';
+  document.getElementById('status-block').style.display = '';
+}
+
+async function loadPayoutHistory(tenantId) {
+  const snap = await tenantCol('referralPayouts').orderBy('createdAt', 'desc').limit(20).get();
+  const el = document.getElementById('payout-list');
+  if (snap.empty) { el.innerHTML = ''; return; }
+  el.innerHTML = snap.docs.map(d => {
+    const p = d.data();
+    return `<div class="payout-row"><span>${p.fromSchoolName || 'A referred school'} — ${fmtRupees(p.amountPaise)}</span>
+      <span class="status-${p.status}">${p.status}</span></div>`;
+  }).join('');
+}
+
+async function loadPaymentHistory() {
+  const snap = await tenantCol('subscriptionPayments').orderBy('createdAt', 'desc').limit(20).get();
+  const el = document.getElementById('payment-history');
+  if (snap.empty) return;
+  el.innerHTML = snap.docs.map(d => {
+    const p = d.data();
+    return `<div class="payout-row"><span>${PLANS[p.plan] ? PLANS[p.plan].name : p.plan} — ${fmtDate(p.createdAt)}</span>
+      <span>${fmtRupees(p.amountPaise)}</span></div>`;
+  }).join('');
+}
+
+function copyReferralLink() {
+  const input = document.getElementById('referral-link');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => showToast('Referral link copied.', 'success'));
+}
+
+async function startPayment() {
+  const btn = document.getElementById('pay-btn');
+  const errEl = document.getElementById('pay-error');
+  errEl.style.display = 'none';
+
+  const phone = document.getElementById('pay-phone').value.trim();
+  if (!/^\d{10}$/.test(phone)) {
+    errEl.textContent = 'Enter a valid 10-digit mobile number.';
+    errEl.style.display = '';
+    return;
+  }
+
+  btn.disabled = true;
+  const origHTML = btn.innerHTML;
+  btn.innerHTML = '<span>Starting payment...</span>';
+  try {
+    const user = firebase.auth().currentUser;
+    const resp = await fetch(WORKER_URL + '/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: _tenant.id, plan: _selectedPlan, phone,
+        name: (user && user.displayName) || _tenant.name || 'Admin',
+      }),
+    });
+    if (!resp.ok) throw new Error('Could not start payment. Try again.');
+    const { payment_session_id, order_id } = await resp.json();
+
+    btn.innerHTML = '<span>Opening payment...</span>';
+    const result = await cashfree.checkout({ paymentSessionId: payment_session_id, redirectTarget: '_modal' });
+    if (result.error) {
+      btn.disabled = false; btn.innerHTML = origHTML;
+      return;
+    }
+
+    btn.innerHTML = '<span>Confirming...</span>';
+    await new Promise(r => setTimeout(r, 3000));
+    const stResp = await fetch(`${WORKER_URL}/order-status?order_id=${order_id}`);
+    const stData = await stResp.json();
+    if (stData.order_status === 'PAID') {
+      showToast('Payment received — your plan is active.', 'success');
+      await new Promise(r => setTimeout(r, 800));
+      window.location.href = 'dashboard.html' + window.location.search;
+      return;
+    }
+    btn.disabled = false; btn.innerHTML = origHTML;
+    errEl.textContent = 'Payment not confirmed yet. If money was deducted, it will reflect shortly — refresh this page.';
+    errEl.style.display = '';
+  } catch (e) {
+    btn.disabled = false; btn.innerHTML = origHTML;
+    errEl.textContent = e.message || 'Something went wrong. Please try again.';
+    errEl.style.display = '';
+  }
+}
+
+bootstrapPage(['admin']).then(async ({ tenant }) => {
+  // Fetch fresh — the cached tenant object from tenant.js's sessionStorage
+  // round-trip loses Timestamp fields (only survives as {seconds,nanoseconds},
+  // no .toMillis()), and billing status must never be stale here anyway.
+  const snap = await getDb().collection('tenants').doc(tenant.id).get();
+  _tenant = { id: tenant.id, ...snap.data() };
+
+  cashfree = Cashfree({ mode: 'production' });
+  _selectedPlan = isValidPlan(_tenant.plan) ? _tenant.plan : 'starter';
+  renderPlanPicker();
+  updatePayAmount();
+  renderStatus(_tenant);
+  document.getElementById('referral-link').value =
+    window.location.origin + '/signup.html?ref=' + tenant.id;
+  loadPayoutHistory(tenant.id);
+  loadPaymentHistory();
+}).catch(() => {});
+</script>
+</body>
+</html>

@@ -241,6 +241,107 @@ await check('anyone CANNOT read the underlying students collection directly', as
   await assertFails(db.collection(`tenants/${T1}/students`).get());
 });
 
+console.log('\n=== Billing fields (trial/plan/subscription) ===');
+
+const superadmin = 'uidSuperadmin';
+await seed(async (db) => {
+  await db.doc(`tenants/${T1}`).set({
+    ownerUid: admin1, name: 'Tenant One', plan: 'starter', billingStatus: 'trialing',
+    studentCap: 30, waNotifications: false, referredByTenantId: null, referralCredited: false
+  });
+  await db.doc(`superadmins/${superadmin}`).set({ email: 'super@example.com' });
+});
+
+await check('tenant admin CAN still update non-billing settings (masters.html save)', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}`).update({ name: 'Renamed School', sessionMins: 90 }));
+});
+
+await check('tenant admin CANNOT self-grant an active billing status', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}`).update({ billingStatus: 'active' }));
+});
+
+await check('tenant admin CANNOT extend their own trial', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+  await assertFails(db.doc(`tenants/${T1}`).update({ trialEndsAt: farFuture }));
+});
+
+await check('tenant admin CANNOT raise their own student cap', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}`).update({ studentCap: 999999 }));
+});
+
+await check('superadmin CAN update billing fields on any tenant', async () => {
+  const db = testEnv.authenticatedContext(superadmin).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}`).update({ billingStatus: 'active', plan: 'growth' }));
+});
+
+await check('non-superadmin CANNOT read another user\'s superadmins doc', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`superadmins/${superadmin}`).get());
+});
+
+await check('a user CAN read their own superadmins doc (self-check)', async () => {
+  const db = testEnv.authenticatedContext(superadmin).firestore();
+  await assertSucceeds(db.doc(`superadmins/${superadmin}`).get());
+});
+
+await check('nobody can client-write superadmins (seeded manually only)', async () => {
+  const db = testEnv.authenticatedContext(superadmin).firestore();
+  await assertFails(db.doc(`superadmins/${superadmin}`).set({ email: 'x' }));
+});
+
+await check('tenant admin CAN read their own subscriptionPayments', async () => {
+  await seed(async (db) => db.doc(`tenants/${T1}/subscriptionPayments/order1`).set({ plan: 'starter', amountPaise: 59900 }));
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}/subscriptionPayments/order1`).get());
+});
+
+await check('tenant admin CANNOT write subscriptionPayments (Worker-only)', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}/subscriptionPayments/orderFake`).set({ plan: 'pro', amountPaise: 1 }));
+});
+
+await check('tenant admin CANNOT create a referralPayout for themselves', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}/referralPayouts/fake`).set({ amountPaise: 30000, status: 'pending' }));
+});
+
+await check('superadmin CAN mark a referralPayout paid', async () => {
+  await seed(async (db) => db.doc(`tenants/${T1}/referralPayouts/payout1`).set({ amountPaise: 30000, status: 'pending', fromTenantId: T2 }));
+  const db = testEnv.authenticatedContext(superadmin).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}/referralPayouts/payout1`).update({ status: 'paid' }));
+});
+
+await check('tenant admin CANNOT mark their own referralPayout paid', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertFails(db.doc(`tenants/${T1}/referralPayouts/payout1`).update({ status: 'paid' }));
+});
+
+console.log('\n=== Self-serve signup approval (status: pending) ===');
+
+await check('self-serve signup can be created with status "pending" (approval gate)', async () => {
+  const uid = 'uidPendingStudent';
+  const phone = '+919666666666';
+  const db = testEnv.authenticatedContext(uid, { phone_number: phone }).firestore();
+  const batch = db.batch();
+  batch.set(db.doc(`tenants/${T1}/students/sidPending`), { name: 'Pending Student', phone, status: 'pending', enrollmentNumber: '' });
+  batch.set(db.doc(`users/${uid}`), { tenantId: T1, role: 'student', studentId: 'sidPending', phone });
+  await assertSucceeds(batch.commit());
+});
+
+await check('a pending student can still read their own record (sees approval status)', async () => {
+  const db = testEnv.authenticatedContext('uidPendingStudent').firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}/students/sidPending`).get());
+});
+
+await check('admin can approve a pending student (flip status to active + assign enrollment no)', async () => {
+  const db = testEnv.authenticatedContext(admin1).firestore();
+  await assertSucceeds(db.doc(`tenants/${T1}/students/sidPending`).update({ status: 'active', enrollmentNumber: 'DS-2026-099' }));
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 await testEnv.cleanup();
 if (failed > 0) process.exit(1);

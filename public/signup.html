@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="/shared/js/utils.js"></script>
+  <script src="/shared/js/plans.js"></script>
 </head>
 <body>
 <div class="login-page">
@@ -120,12 +121,27 @@ async function createSchool() {
     const slugSnap = await db.collection('tenantSlugs').doc(slug).get();
     if (slugSnap.exists) { showError('That web address is already taken. Try another.'); return; }
 
+    const params = new URLSearchParams(window.location.search);
+    const plan = isValidPlan(params.get('plan')) ? params.get('plan') : 'starter';
+    let referredByTenantId = null;
+    const refSlug = params.get('ref');
+    if (refSlug && refSlug !== slug) {
+      const refSnap = await db.collection('tenants').doc(refSlug).get();
+      if (refSnap.exists) referredByTenantId = refSlug;
+    }
+
+    const now = Date.now();
+    const trialEndsAt = firebase.firestore.Timestamp.fromMillis(now + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+
     const tenantId = slug;
     const batch = db.batch();
     batch.set(db.collection('tenants').doc(tenantId), {
       ownerUid: user.uid, name, address: '',
       enrollmentPrefix: 'DS', referralDiscountPaise: 20000, referralRewardPaise: 20000,
       sessionMins: 120, govtRecognised: false,
+      plan, billingStatus: 'trialing', trialEndsAt, currentPeriodEnd: null,
+      studentCap: PLANS[plan].studentCap, waNotifications: PLANS[plan].waNotifications,
+      referredByTenantId, referralCredited: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     batch.set(db.collection('tenantSlugs').doc(slug), { tenantId });

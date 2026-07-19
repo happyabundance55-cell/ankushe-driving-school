@@ -25,6 +25,21 @@ service cloud.firestore {
       return isMember(tid) && myUser().role == 'student' && myUser().studentId == sid;
     }
 
+    function isSuperadmin() {
+      return signedIn() && exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
+    }
+
+    // Billing fields are written only by the Cloudflare Worker (Admin SDK,
+    // bypasses rules entirely) after a verified Cashfree payment, or by a
+    // superadmin — never by a tenant admin's own client, since billingStatus
+    // gates access to the whole admin app.
+    function billingKeysUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+        ['plan', 'billingStatus', 'trialEndsAt', 'currentPeriodEnd', 'studentCap',
+         'waNotifications', 'referredByTenantId', 'referralCredited']
+      );
+    }
+
     // Firebase Phone Auth sets this automatically on the ID token — verified
     // server-side at OTP sign-in, not something the client can forge.
     function verifiedPhone() {
@@ -54,8 +69,15 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && !exists(/databases/$(database)/documents/tenants/$(tid));
-      allow update: if hasRole(tid, ['admin']);
+      allow update: if (hasRole(tid, ['admin']) && billingKeysUnchanged()) || isSuperadmin();
       allow delete: if false;
+    }
+
+    // Platform-level admins (not tenant-scoped). Seeded manually — never
+    // client-writable, purely a marker doc checked by isSuperadmin() above.
+    match /superadmins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
     }
 
     // ── Identity: users/{uid}, keyed by Firebase Auth UID ──────────────────
@@ -170,6 +192,24 @@ service cloud.firestore {
 
     match /tenants/{tid}/referrals/{id} {
       allow read, write: if hasRole(tid, ['admin','mentor']);
+    }
+
+    // Subscription (school-pays-Sarathi) payment records — written only by
+    // the Cloudflare Worker's Admin SDK path after a verified Cashfree
+    // payment; never by any client.
+    match /tenants/{tid}/subscriptionPayments/{id} {
+      allow read: if hasRole(tid, ['admin']) || isSuperadmin();
+      allow write: if false;
+    }
+
+    // School-to-school referral credits. Created only by the Worker (Admin
+    // SDK) when a referred school pays for the first time; superadmin marks
+    // them paid out (cash) from the superadmin panel — a normal client write.
+    match /tenants/{tid}/referralPayouts/{id} {
+      allow read: if hasRole(tid, ['admin']) || isSuperadmin();
+      allow create: if false;
+      allow update: if isSuperadmin();
+      allow delete: if false;
     }
 
     // ── Reference/master data & scheduling — staff only ─────────────────────

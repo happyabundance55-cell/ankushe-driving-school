@@ -166,6 +166,26 @@ async function getStudents({ status, search } = {}) {
   return students;
 }
 
+// Approves a self-serve student signup (status 'pending' -> 'active'). If the
+// signup never got an enrollment number (self-serve leaves it blank — see
+// createNewStudentSignup in auth.js), this is also where one finally gets
+// assigned, mirroring createStudent()'s own referralCodes bookkeeping.
+async function approveStudent(id) {
+  const existing = await getStudent(id);
+  if (!existing) throw new Error('Student not found');
+
+  const updates = { status: 'active', approvedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (!existing.enrollmentNumber) {
+    updates.enrollmentNumber = await getNextEnrollmentNumber();
+  }
+  await tenantCol('students').doc(id).update(updates);
+
+  if (updates.enrollmentNumber) {
+    await tenantCol('referralCodes').doc(updates.enrollmentNumber).set({ referrerId: id, referrerName: existing.name });
+  }
+  return updates;
+}
+
 async function updateStudentPhoto(studentId, { url, publicId }) {
   await tenantCol('students').doc(studentId).update({ photoURL: url, photoPublicId: publicId || '' });
 }

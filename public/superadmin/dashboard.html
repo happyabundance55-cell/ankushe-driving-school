@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Superadmin — Sarathi</title>
+  <link rel="stylesheet" href="/shared/css/main.css">
+  <style>
+    table.sa-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    table.sa-table th, table.sa-table td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--border); }
+    table.sa-table th { color:var(--text-muted); font-weight:700; font-size:.78rem; text-transform:uppercase; }
+    .sa-badge { display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.72rem;font-weight:700; }
+    .sa-badge.trialing { background:rgba(224,160,32,.16);color:#c47c05; }
+    .sa-badge.active   { background:rgba(34,150,80,.16);color:#1c7a44; }
+    .sa-badge.expired  { background:rgba(200,50,50,.16);color:#b3261e; }
+  </style>
+  <script src="/shared/js/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="/shared/js/utils.js"></script>
+</head>
+<body>
+
+<div class="page-container" style="max-width:1000px">
+  <div class="page-title">Sarathi — Superadmin</div>
+
+  <div id="signin-block" class="card" style="display:none;max-width:400px">
+    <p style="margin-bottom:1rem">Sign in with your superadmin Google account.</p>
+    <button class="btn btn-primary" onclick="doSignIn()">Sign in with Google</button>
+  </div>
+
+  <div id="denied-block" class="card" style="display:none">
+    <p style="margin:0">This Google account is not a Sarathi superadmin.</p>
+    <button class="btn btn-outline btn-sm" style="margin-top:.75rem" onclick="firebase.auth().signOut().then(()=>location.reload())">Sign out</button>
+  </div>
+
+  <div id="loading-block" class="loading"><div class="spinner"></div></div>
+
+  <div id="main-block" style="display:none">
+    <div class="card">
+      <div class="card-title">Schools</div>
+      <div style="overflow-x:auto">
+        <table class="sa-table">
+          <thead><tr><th>School</th><th>Plan</th><th>Status</th><th>Trial ends</th><th>Period ends</th></tr></thead>
+          <tbody id="tenants-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">Pending referral payouts</div>
+      <div id="payouts-list"><p style="font-size:.85rem;color:var(--text-muted);margin:0">Nothing pending.</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fmtRupees(paise) { return '₹' + (paise / 100).toLocaleString('en-IN'); }
+
+function doSignIn() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(e => alert(e.message));
+}
+
+function billingStatusOf(t) {
+  const now = Date.now();
+  let status = t.billingStatus || 'trialing';
+  const trialMs  = t.trialEndsAt ? t.trialEndsAt.toMillis() : null;
+  const periodMs = t.currentPeriodEnd ? t.currentPeriodEnd.toMillis() : null;
+  if (status === 'trialing' && trialMs && now > trialMs) status = 'expired';
+  if (status === 'active' && periodMs && now > periodMs) status = 'expired';
+  return status;
+}
+
+async function loadTenants() {
+  const db = firebase.firestore();
+  const snap = await db.collection('tenants').get();
+  const rows = snap.docs.map(d => {
+    const t = d.data();
+    const status = billingStatusOf(t);
+    return `<tr>
+      <td>${t.name || d.id}</td>
+      <td>${t.plan || 'starter'}</td>
+      <td><span class="sa-badge ${status}">${status}</span></td>
+      <td>${fmtDate(t.trialEndsAt)}</td>
+      <td>${fmtDate(t.currentPeriodEnd)}</td>
+    </tr>`;
+  });
+  document.getElementById('tenants-body').innerHTML = rows.join('') ||
+    '<tr><td colspan="5" style="color:var(--text-muted)">No schools yet.</td></tr>';
+}
+
+async function loadPendingPayouts() {
+  const db = firebase.firestore();
+  const snap = await db.collectionGroup('referralPayouts').where('status', '==', 'pending').get();
+  const el = document.getElementById('payouts-list');
+  if (snap.empty) return;
+  el.innerHTML = snap.docs.map(d => {
+    const p = d.data();
+    const tid = d.ref.parent.parent.id;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem .9rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:.4rem;font-size:.85rem">
+      <span>${p.fromSchoolName || 'A school'} referred by <strong>${tid}</strong> — ${fmtRupees(p.amountPaise)}</span>
+      <button class="btn btn-sm btn-outline" onclick="markPaid('${tid}','${d.id}', this)">Mark paid</button>
+    </div>`;
+  }).join('');
+}
+
+async function markPaid(tenantId, payoutId, btn) {
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await firebase.firestore().collection('tenants').doc(tenantId)
+      .collection('referralPayouts').doc(payoutId)
+      .update({ status: 'paid', paidAt: firebase.firestore.FieldValue.serverTimestamp() });
+    showToast('Marked paid.', 'success');
+    loadPendingPayouts();
+  } catch (e) {
+    showToast(e.message, 'danger');
+    btn.disabled = false; btn.textContent = 'Mark paid';
+  }
+}
+
+(function init() {
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.auth().onAuthStateChanged(async user => {
+    document.getElementById('loading-block').style.display = 'none';
+    if (!user) {
+      document.getElementById('signin-block').style.display = '';
+      return;
+    }
+    const saSnap = await firebase.firestore().collection('superadmins').doc(user.uid).get();
+    if (!saSnap.exists) {
+      document.getElementById('denied-block').style.display = '';
+      return;
+    }
+    document.getElementById('main-block').style.display = '';
+    loadTenants();
+    loadPendingPayouts();
+  });
+})();
+</script>
+</body>
+</html>

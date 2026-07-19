@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms &amp; Conditions — Sarathi</title>
+  <link rel="stylesheet" href="shared/css/main.css">
+  <style>
+    .legal-wrap { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .legal-back { font-size: .85rem; font-weight: 700; color: var(--primary); text-decoration: none; display: inline-block; margin-bottom: 1.5rem; }
+    .legal-wrap h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .5rem; }
+    .legal-wrap .sub { color: var(--text-muted); margin-bottom: 2rem; }
+    .legal-wrap h2 { font-size: 1.05rem; font-weight: 700; margin: 1.75rem 0 .6rem; }
+    .legal-wrap p, .legal-wrap li { font-size: .92rem; line-height: 1.7; color: var(--text); }
+    .legal-wrap ul { padding-left: 1.2rem; margin: .4rem 0; }
+    .legal-wrap li { margin-bottom: .3rem; }
+    .updated-note { font-size: .78rem; color: var(--text-subtle); margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .lp-footer { max-width: 1080px; margin: 2rem auto 0; padding: 2rem 1.5rem 3rem; text-align: center; color: var(--text-subtle); font-size: .82rem; border-top: 1px solid var(--border); }
+    .lp-footer a { color: var(--text-subtle); text-decoration: none; }
+    .lp-footer a:hover { color: var(--primary); }
+    .lp-footer .sep { margin: 0 .5rem; }
+  </style>
+</head>
+<body>
+
+<div class="legal-wrap">
+  <a class="legal-back" href="/">← Sarathi</a>
+  <h1>Terms &amp; Conditions</h1>
+  <p class="sub">Please read these terms before creating a school account on Sarathi.</p>
+
+  <h2>1. About Sarathi</h2>
+  <p>
+    Sarathi is a web-based management tool for driving schools, covering student enrollment, in-vehicle attendance,
+    fee tracking, government form generation (Form 14/15), and related administrative tasks. It's provided as a
+    subscription service billed to the driving school ("you", "your school").
+  </p>
+
+  <h2>2. Accounts</h2>
+  <p>
+    A school account is created by its owner/admin via Google Sign-In. You're responsible for the accuracy of the
+    information you enter (student records, fees, attendance) and for controlling access to your school's admin and
+    instructor logins.
+  </p>
+
+  <h2>3. Plans, trial &amp; billing</h2>
+  <p>
+    New schools get a free trial period with full access, no payment required. After the trial, continued access
+    requires paying for a plan (Starter, Growth, or Pro — pricing shown on the pricing page, in INR). Billing is
+    manual and period-based, not an auto-renewing subscription — see
+    <a href="/refunds.html" style="color:var(--primary)">Refunds &amp; Cancellations</a> for exactly how that works.
+    Each plan has a student-count limit; exceeding it requires upgrading to a higher plan.
+  </p>
+
+  <h2>4. Your data</h2>
+  <p>
+    Student, fee, and attendance records you enter belong to your school. Sarathi stores this data (via Google
+    Firebase) to provide the service and does not sell it. You're responsible for the accuracy and lawfulness of the
+    data you collect from your own students (e.g. obtaining appropriate consent to store their details).
+  </p>
+
+  <h2>5. Acceptable use</h2>
+  <p>You agree not to use Sarathi to:</p>
+  <ul>
+    <li>Store or process data you don't have the right to collect;</li>
+    <li>Attempt to access another school's data or bypass account/billing restrictions;</li>
+    <li>Interfere with the normal operation of the service.</li>
+  </ul>
+
+  <h2>6. Service availability</h2>
+  <p>
+    Sarathi is provided on an "as is" / "as available" basis. While we aim for reliable uptime, we don't guarantee
+    uninterrupted access and aren't liable for losses arising from temporary outages, third-party service issues
+    (e.g. Firebase, Cashfree), or data entry errors made within your own account.
+  </p>
+
+  <h2>7. Termination</h2>
+  <p>
+    You may stop using Sarathi at any time by simply not renewing your plan. We may suspend or terminate accounts
+    that violate these terms, including non-payment beyond a reasonable grace period.
+  </p>
+
+  <h2>8. Changes to these terms</h2>
+  <p>
+    We may update these terms from time to time; the "last updated" date below will reflect the latest revision.
+    Continued use of Sarathi after a change means you accept the updated terms.
+  </p>
+
+  <h2>9. Governing law</h2>
+  <p>These terms are governed by the laws of India.</p>
+
+  <h2>10. Contact</h2>
+  <p>Questions about these terms — see <a href="/contact.html" style="color:var(--primary)">Contact Us</a>.</p>
+
+  <div class="updated-note">Last updated: July 2026.</div>
+</div>
+
+<div class="lp-footer">
+  Sarathi — driving school management, made simple.
+  <div style="margin-top:.5rem">
+    <a href="/terms.html">Terms &amp; Conditions</a><span class="sep">·</span><a href="/refunds.html">Refunds &amp; Cancellations</a><span class="sep">·</span><a href="/contact.html">Contact Us</a>
+  </div>
+</div>
+
+</body>
+</html>

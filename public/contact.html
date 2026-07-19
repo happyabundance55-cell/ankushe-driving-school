@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact Us — Sarathi</title>
+  <link rel="stylesheet" href="shared/css/main.css">
+  <style>
+    .legal-wrap { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .legal-back { font-size: .85rem; font-weight: 700; color: var(--primary); text-decoration: none; display: inline-block; margin-bottom: 1.5rem; }
+    .legal-wrap h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .5rem; }
+    .legal-wrap .sub { color: var(--text-muted); margin-bottom: 2rem; }
+    .contact-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; }
+    .contact-row { display: flex; align-items: center; gap: .85rem; padding: .75rem 0; border-bottom: 1px solid var(--border); }
+    .contact-row:last-child { border-bottom: none; }
+    .contact-row svg { color: var(--primary); flex-shrink: 0; }
+    .contact-row a { color: var(--text); font-weight: 600; text-decoration: none; }
+    .contact-row a:hover { color: var(--primary); }
+    .contact-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: .1rem; }
+    .lp-footer { max-width: 1080px; margin: 2rem auto 0; padding: 2rem 1.5rem 3rem; text-align: center; color: var(--text-subtle); font-size: .82rem; border-top: 1px solid var(--border); }
+    .lp-footer a { color: var(--text-subtle); text-decoration: none; }
+    .lp-footer a:hover { color: var(--primary); }
+    .lp-footer .sep { margin: 0 .5rem; }
+  </style>
+</head>
+<body>
+
+<div class="legal-wrap">
+  <a class="legal-back" href="/">← Sarathi</a>
+  <h1>Contact Us</h1>
+  <p class="sub">Questions about your school's account, billing, or the product in general — reach us directly.</p>
+
+  <div class="contact-card">
+    <div class="contact-row">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+      <div>
+        <span class="contact-label">Email</span>
+        <a href="mailto:happyabundance55@gmail.com">happyabundance55@gmail.com</a>
+      </div>
+    </div>
+    <div class="contact-row">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      <div>
+        <span class="contact-label">Phone</span>
+        <a href="tel:+918451046072">+91 84510 46072</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lp-footer">
+  Sarathi — driving school management, made simple.
+  <div style="margin-top:.5rem">
+    <a href="/terms.html">Terms &amp; Conditions</a><span class="sep">·</span><a href="/refunds.html">Refunds &amp; Cancellations</a><span class="sep">·</span><a href="/contact.html">Contact Us</a>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('sarathi-theme');
+      const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refunds &amp; Cancellations — Sarathi</title>
+  <link rel="stylesheet" href="shared/css/main.css">
+  <style>
+    .legal-wrap { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .legal-back { font-size: .85rem; font-weight: 700; color: var(--primary); text-decoration: none; display: inline-block; margin-bottom: 1.5rem; }
+    .legal-wrap h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .5rem; }
+    .legal-wrap .sub { color: var(--text-muted); margin-bottom: 2rem; }
+    .legal-wrap h2 { font-size: 1.05rem; font-weight: 700; margin: 1.75rem 0 .6rem; }
+    .legal-wrap p, .legal-wrap li { font-size: .92rem; line-height: 1.7; color: var(--text); }
+    .legal-wrap ul { padding-left: 1.2rem; margin: .4rem 0; }
+    .legal-wrap li { margin-bottom: .3rem; }
+    .updated-note { font-size: .78rem; color: var(--text-subtle); margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .lp-footer { max-width: 1080px; margin: 2rem auto 0; padding: 2rem 1.5rem 3rem; text-align: center; color: var(--text-subtle); font-size: .82rem; border-top: 1px solid var(--border); }
+    .lp-footer a { color: var(--text-subtle); text-decoration: none; }
+    .lp-footer a:hover { color: var(--primary); }
+    .lp-footer .sep { margin: 0 .5rem; }
+  </style>
+</head>
+<body>
+
+<div class="legal-wrap">
+  <a class="legal-back" href="/">← Sarathi</a>
+  <h1>Refunds &amp; Cancellations</h1>
+  <p class="sub">Sarathi is billed manually, one period at a time — there's no subscription running in the background to cancel.</p>
+
+  <h2>How billing works</h2>
+  <p>
+    When you pay for a plan (Starter, Growth, or Pro), that payment activates access for a 30-day period from the date of payment.
+    No card or payment method is stored, and nothing is charged automatically after that — when the period ends, your school's
+    admin simply comes back to the Billing page and pays again to continue. If you don't pay again, access pauses; nothing
+    keeps charging you in the background.
+  </p>
+
+  <h2>Cancellations</h2>
+  <p>
+    Because nothing auto-renews, there's no separate "cancel" action needed — you cancel simply by not making the next payment.
+    Your school's data is not deleted when a period lapses; it stays intact and access resumes as soon as you pay again.
+  </p>
+
+  <h2>Refunds</h2>
+  <p>
+    Payments for a period already activated are non-refundable, including if you choose to stop using Sarathi partway through
+    a paid period. If a payment was deducted but your plan was not activated due to a technical error on our end, contact us
+    at <a href="mailto:happyabundance55@gmail.com" style="color:var(--primary)">happyabundance55@gmail.com</a> with your
+    payment reference and we'll investigate and resolve it, including a refund if the fault was ours.
+  </p>
+
+  <h2>Free trial</h2>
+  <p>
+    New schools get a free trial period with no payment required. If you decide not to continue, simply stop using the
+    account — there is nothing to cancel and nothing will be charged.
+  </p>
+
+  <div class="updated-note">Last updated: July 2026. Questions about a specific payment — see <a href="/contact.html" style="color:var(--primary)">Contact Us</a>.</div>
+</div>
+
+<div class="lp-footer">
+  Sarathi — driving school management, made simple.
+  <div style="margin-top:.5rem">
+    <a href="/terms.html">Terms &amp; Conditions</a><span class="sep">·</span><a href="/refunds.html">Refunds &amp; Cancellations</a><span class="sep">·</span><a href="/contact.html">Contact Us</a>
+  </div>
+</div>
+
+</body>
+</html>

@@ -244,6 +244,23 @@ function applyBranding(tenant) {
   }
 }
 
+// Compact letterhead block (logo + name + address/phone/email) for
+// printable views — attendance, student profile, fee receipts. NOT used on
+// Form 14/15: those follow a fixed government-mandated layout that isn't
+// safe to guess-modify.
+function renderLetterheadHTML(tenant) {
+  if (!tenant) return '';
+  const logo = tenant.logoURL ? `<img src="${escapeHtml(tenant.logoURL)}" class="letterhead-logo" alt="">` : '';
+  const contactBits = [];
+  if (tenant.address) contactBits.push(escapeHtml(tenant.address));
+  if (tenant.phone)   contactBits.push(displayPhone(tenant.phone));
+  if (tenant.email)   contactBits.push(escapeHtml(tenant.email));
+  const contact = contactBits.length ? `<div class="letterhead-contact">${contactBits.join(' &middot; ')}</div>` : '';
+  return `<div class="letterhead">${logo}<div class="letterhead-text">
+    <div class="letterhead-name">${escapeHtml(tenant.name || 'Sarathi')}</div>${contact}
+  </div></div>`;
+}
+
 // Appends the current tenant's ?t= param to same-page relative links (nav
 // bars, etc.) so navigating between pages doesn't lose which school you're
 // in. Doesn't touch external links, #anchors, mailto:/tel:, or links that

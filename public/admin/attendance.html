@@ -158,8 +158,8 @@
   </div>
 
   <div class="print-attendance-header">
-    <h1 style="font-size:1.3rem;font-weight:700" id="print-school-name">Sarathi</h1>
-    <p id="print-subtitle" style="font-size:.85rem;color:#7a5018"></p>
+    <div id="print-letterhead"></div>
+    <p id="print-subtitle" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem"></p>
   </div>
 
   <!-- Tabs -->
@@ -241,7 +241,7 @@ let _activeTab = 'records';
 
 bootstrapPage(['admin']).then(async ({ profile }) => {
   _userProfile = profile;
-  document.getElementById('print-school-name').textContent = getTenant().name || 'Sarathi';
+  document.getElementById('print-letterhead').innerHTML = renderLetterheadHTML(getTenant());
   const [students, instructors] = await Promise.all([getStudents({ status: 'all' }), getActiveInstructors()]);
   _allStudents    = students;
   _allInstructors = instructors;

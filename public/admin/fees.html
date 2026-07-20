@@ -93,6 +93,9 @@
 </nav>
 
 <div class="page-container">
+  <div id="receipt-print-area" class="print-only"></div>
+
+  <div id="fees-main-content">
   <div class="page-title">Fee Management</div>
 
   <!-- Student selector -->
@@ -185,12 +188,14 @@
     <div class="card-title">All Outstanding Balances</div>
     <div id="outstanding-list"><div class="loading"><div class="spinner"></div></div></div>
   </div>
+  </div>
 </div>
 
 <script>
 let _selectedStudentId = null;
 let _allStudents       = [];
 let _ts = null;
+let _currentPayments = [];
 
 bootstrapPage(['admin']).then(async () => {
   _allStudents = await getStudents({ status: 'all' });
@@ -266,26 +271,68 @@ async function loadPaymentHistory(id) {
   const el = document.getElementById('payment-history');
   try {
     const payments = await getStudentPayments(id);
+    _currentPayments = payments;
     if (!payments.length) { el.innerHTML = '<div class="empty-state"><h3>No payments recorded</h3></div>'; return; }
     el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Date &amp; Time</th><th>Amount</th><th>Method</th><th>Note</th></tr></thead>
+      <thead><tr><th>Date &amp; Time</th><th>Amount</th><th>Method</th><th>Note</th><th class="no-print">Receipt</th></tr></thead>
       <tbody>
         ${payments.map(p => `<tr>
           <td>${formatDateTime(p.date)}</td>
           <td class="td-amount" style="color:var(--success)">${formatCurrency(p.amount)}</td>
           <td>${escapeHtml(p.method)}</td>
           <td class="td-muted">${escapeHtml(p.note || '—')}</td>
+          <td class="no-print"><button class="btn btn-sm btn-outline" onclick="printReceipt('${p.id}')">Print</button></td>
         </tr>`).join('')}
         <tr style="background:var(--bg);font-weight:600">
           <td>Total Paid</td>
           <td class="td-amount" style="color:var(--success)">${formatCurrency(payments.reduce((s,p)=>s+p.amount,0))}</td>
-          <td colspan="2"></td>
+          <td colspan="3"></td>
         </tr>
       </tbody>
     </table></div>`;
   } catch (e) {
     el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
   }
+}
+
+async function printReceipt(paymentId) {
+  const payment = _currentPayments.find(p => p.id === paymentId);
+  if (!payment) return;
+  const student = await getStudent(_selectedStudentId);
+  if (!student) return;
+  const tenant = getTenant();
+
+  const upiBlock = (tenant.upiId && student.balance > 0) ? `
+    <div style="display:flex;align-items:center;gap:.85rem;margin-top:1rem;padding-top:1rem;border-top:1px solid #ccc">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${encodeURIComponent(tenant.upiId)}&pn=${encodeURIComponent(tenant.name||'School')}&am=${(student.balance/100).toFixed(2)}&cu=INR`)}" width="90" height="90" alt="UPI QR">
+      <div>
+        <div style="font-weight:700">Pay balance via UPI</div>
+        <div style="font-size:.85rem;color:#555">${escapeHtml(tenant.upiId)} &middot; Balance due: ${formatCurrency(student.balance)}</div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('receipt-print-area').innerHTML = `
+    ${renderLetterheadHTML(tenant)}
+    <h2 style="text-align:center;font-size:1.05rem;margin:.5rem 0 1rem">Payment Receipt</h2>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:1rem">
+      <tr><td style="padding:.3rem 0;color:#555">Student</td><td style="padding:.3rem 0;text-align:right;font-weight:700">${escapeHtml(student.name)} (${escapeHtml(student.enrollmentNumber || '—')})</td></tr>
+      <tr><td style="padding:.3rem 0;color:#555">Date</td><td style="padding:.3rem 0;text-align:right">${formatDateTime(payment.date)}</td></tr>
+      <tr><td style="padding:.3rem 0;color:#555">Amount Paid</td><td style="padding:.3rem 0;text-align:right;font-weight:700;font-size:1.1rem">${formatCurrency(payment.amount)}</td></tr>
+      <tr><td style="padding:.3rem 0;color:#555">Method</td><td style="padding:.3rem 0;text-align:right">${escapeHtml(payment.method)}</td></tr>
+      ${payment.note ? `<tr><td style="padding:.3rem 0;color:#555">Note</td><td style="padding:.3rem 0;text-align:right">${escapeHtml(payment.note)}</td></tr>` : ''}
+      <tr><td style="padding:.3rem 0;color:#555;border-top:1px solid #ccc;padding-top:.5rem">Total Fee</td><td style="padding:.3rem 0;text-align:right;border-top:1px solid #ccc;padding-top:.5rem">${formatCurrency(student.totalFee)}</td></tr>
+      <tr><td style="padding:.3rem 0;color:#555">Total Paid Till Date</td><td style="padding:.3rem 0;text-align:right">${formatCurrency(student.paidFee)}</td></tr>
+      <tr><td style="padding:.3rem 0;font-weight:700">Balance Due</td><td style="padding:.3rem 0;text-align:right;font-weight:700">${formatCurrency(student.balance)}</td></tr>
+    </table>
+    ${upiBlock}
+  `;
+  // Receipt should be the only thing on the printed page — the rest of the
+  // page (student picker, fee summary, other payment rows) gets a temporary
+  // no-print, restored once the print dialog closes either way.
+  const main = document.getElementById('fees-main-content');
+  main.classList.add('no-print');
+  window.onafterprint = () => { main.classList.remove('no-print'); window.onafterprint = null; };
+  window.print();
 }
 
 async function submitPayment() {

@@ -210,6 +210,14 @@
             <input type="text" id="set-address" maxlength="200">
           </div>
           <div class="form-group">
+            <label>UPI ID (for students paying fees directly)</label>
+            <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+              <input type="text" id="set-upi" placeholder="school@upi" style="flex:1;min-width:200px" oninput="updateUpiQrPreview()">
+              <img id="upi-qr-preview" width="84" height="84" style="border-radius:var(--radius-sm);border:1px solid var(--border);display:none" alt="UPI QR code">
+            </div>
+            <div class="form-hint">QR code is generated automatically from the UPI ID — shown on fee receipts.</div>
+          </div>
+          <div class="form-group">
             <label>Enrollment Number Prefix</label>
             <input type="text" id="set-prefix" maxlength="6" style="text-transform:uppercase;max-width:140px">
           </div>
@@ -369,6 +377,8 @@ async function loadSettings() {
   document.getElementById('set-phone').value             = (t.phone || '').replace(/^\+91/, '');
   document.getElementById('set-email').value              = t.email || '';
   document.getElementById('set-address').value          = t.address || '';
+  document.getElementById('set-upi').value                = t.upiId || '';
+  updateUpiQrPreview();
   document.getElementById('set-prefix').value            = t.enrollmentPrefix || 'DS';
   document.getElementById('set-discount').value           = (t.referralDiscountPaise || 0) / 100;
   document.getElementById('set-reward').value              = (t.referralRewardPaise || 0) / 100;
@@ -377,6 +387,20 @@ async function loadSettings() {
   if (t.logoURL) {
     document.getElementById('logo-preview').innerHTML = `<img src="${escapeHtml(t.logoURL)}" class="school-logo">`;
   }
+}
+
+// Same api.qrserver.com pattern already used for the dashboard's student
+// sign-up invite QR — no library needed, just an image URL. Standard UPI
+// deep-link format (pa=payee address, pn=payee name) so scanning it opens
+// any UPI app pre-filled with this school as the payee.
+function updateUpiQrPreview() {
+  const upi = document.getElementById('set-upi').value.trim();
+  const img = document.getElementById('upi-qr-preview');
+  if (!upi) { img.style.display = 'none'; return; }
+  const schoolName = document.getElementById('set-name').value.trim() || 'School';
+  const upiUri = `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(schoolName)}&cu=INR`;
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUri)}`;
+  img.style.display = '';
 }
 
 function previewLogo() {
@@ -406,6 +430,7 @@ async function saveSettings() {
     phone: phoneDigits ? '+91' + phoneDigits : '',
     email: document.getElementById('set-email').value.trim(),
     address: document.getElementById('set-address').value.trim(),
+    upiId: document.getElementById('set-upi').value.trim(),
     enrollmentPrefix: prefix,
     referralDiscountPaise: Math.round((parseFloat(document.getElementById('set-discount').value) || 0) * 100),
     referralRewardPaise: Math.round((parseFloat(document.getElementById('set-reward').value) || 0) * 100),

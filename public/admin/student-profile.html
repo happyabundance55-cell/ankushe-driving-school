@@ -122,6 +122,7 @@ function renderProfile(s, payments, attendance) {
   };
 
   document.getElementById('profile-root').innerHTML = `
+    <div class="print-only">${renderLetterheadHTML(getTenant())}</div>
     <div class="page-title no-print">
       Student Profile
       <div class="page-title-actions">

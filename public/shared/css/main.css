@@ -790,6 +790,21 @@ input[type="number"] { max-width: 180px; }
   font-size: 2rem;
 }
 
+/* ─── Letterhead (attendance/profile/receipt print views) ──────────────────── */
+.letterhead {
+  display: flex; align-items: center; gap: .85rem;
+  padding-bottom: .85rem; margin-bottom: 1rem;
+  border-bottom: 2px solid var(--border);
+}
+.letterhead-logo { width: 52px; height: 52px; object-fit: contain; border-radius: var(--radius-sm); flex-shrink: 0; }
+.letterhead-name { font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; }
+.letterhead-contact { font-size: .8rem; color: var(--text-muted); margin-top: .15rem; }
+@media print {
+  .letterhead { border-bottom-color: #000; }
+  .letterhead-name { color: #000; }
+  .letterhead-contact { color: #333; }
+}
+
 /* ─── Loading & Empty ────────────────────────────────────────────────────────── */
 .loading {
   display: flex;
@@ -982,9 +997,11 @@ input[type="number"] { max-width: 180px; }
 
 
 /* ─── Print ──────────────────────────────────────────────────────────────────── */
+.print-only { display: none; }
 @media print {
   body { background: #fff !important; font-size: 12px; }
   .navbar, .no-print, .btn, button { display: none !important; }
+  .print-only { display: block !important; }
   .card  { box-shadow: none !important; border: 1px solid #ddd !important; margin-bottom: .5rem; }
   .table-wrap { box-shadow: none !important; border: 1px solid #ddd !important; }
   .page-container { margin: 0; padding: 0; max-width: 100%; }

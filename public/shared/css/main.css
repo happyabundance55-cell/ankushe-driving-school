@@ -565,6 +565,19 @@ tbody tr:hover td   { background: rgba(196,124,5,.07); }
   border-color: #94a3b8;
   box-shadow: 0 6px 18px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.08);
 }
+/* Both background and border resolve to near-black in dark mode (var(--white)
+   is the dark surface color there, var(--border) is barely-visible white at
+   10% opacity) — on a dark card/table, an outline button all but disappears.
+   A warm amber glow (matching the dashboard's existing glow language on
+   .metric-card/.chart-wrap) keeps it readable instead of just camouflaged. */
+:root[data-theme="dark"] .btn-outline {
+  border-color: rgba(224,160,32,.4);
+  box-shadow: 0 0 0 1px rgba(224,160,32,.08), 0 0 10px -3px var(--primary);
+}
+:root[data-theme="dark"] .btn-outline:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(224,160,32,.15), 0 0 18px -2px var(--primary);
+}
 
 .btn-sm   { padding: .3rem .65rem; font-size: .8rem; border-radius: var(--radius-sm); }
 .btn-lg   { padding: .8rem 1.75rem; font-size: 1rem; border-radius: var(--radius); }

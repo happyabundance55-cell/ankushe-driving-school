@@ -69,6 +69,9 @@
 </nav>
 
 <div class="page-container" style="max-width:640px">
+  <div id="invoice-print-area" class="print-only"></div>
+
+  <div id="billing-main-content">
   <div class="page-title">Billing</div>
 
   <div class="card">
@@ -115,6 +118,7 @@
   <div class="card" style="margin-top:1rem">
     <div class="card-title">Payment history</div>
     <div id="payment-history"><p style="font-size:.85rem;color:var(--text-muted);margin:0">No payments yet.</p></div>
+  </div>
   </div>
 </div>
 
@@ -186,15 +190,53 @@ async function loadPayoutHistory(tenantId) {
   }).join('');
 }
 
+let _subscriptionPayments = [];
+
 async function loadPaymentHistory() {
   const snap = await tenantCol('subscriptionPayments').orderBy('createdAt', 'desc').limit(20).get();
   const el = document.getElementById('payment-history');
   if (snap.empty) return;
-  el.innerHTML = snap.docs.map(d => {
-    const p = d.data();
-    return `<div class="payout-row"><span>${PLANS[p.plan] ? PLANS[p.plan].name : p.plan} — ${fmtDate(p.createdAt)}</span>
-      <span>${fmtRupees(p.amountPaise)}</span></div>`;
-  }).join('');
+  _subscriptionPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  el.innerHTML = _subscriptionPayments.map(p => `<div class="payout-row">
+      <span>${PLANS[p.plan] ? PLANS[p.plan].name : p.plan} — ${fmtDate(p.createdAt)}</span>
+      <span style="display:flex;align-items:center;gap:.6rem">
+        ${fmtRupees(p.amountPaise)}
+        <button class="btn btn-sm btn-outline" onclick="printInvoice('${p.id}')">Invoice</button>
+      </span>
+    </div>`).join('');
+}
+
+// Sarathi's own seller details — same as the Contact Us page. No GST
+// number yet (unregistered); "inclusive of all taxes" instead of a tax
+// breakdown, matching the user's explicit call.
+const SARATHI_SELLER = { name: 'Sarathi', email: 'happyabundance55@gmail.com', phone: '+918451046072' };
+
+function printInvoice(paymentId) {
+  const payment = _subscriptionPayments.find(p => p.id === paymentId);
+  if (!payment || !_tenant) return;
+
+  const buyerBits = [];
+  if (_tenant.address) buyerBits.push(escapeHtml(_tenant.address));
+  if (_tenant.phone)   buyerBits.push(displayPhone(_tenant.phone));
+  if (_tenant.email)   buyerBits.push(escapeHtml(_tenant.email));
+
+  document.getElementById('invoice-print-area').innerHTML = `
+    ${renderLetterheadHTML(SARATHI_SELLER)}
+    <h2 style="text-align:center;font-size:1.05rem;margin:.5rem 0 1rem">Subscription Invoice</h2>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:1rem">
+      <tr><td style="padding:.3rem 0;color:#555">Billed to</td><td style="padding:.3rem 0;text-align:right;font-weight:700">${escapeHtml(_tenant.name || 'School')}</td></tr>
+      ${buyerBits.length ? `<tr><td colspan="2" style="padding:0 0 .3rem;text-align:right;font-size:.85rem;color:#555">${buyerBits.join(' &middot; ')}</td></tr>` : ''}
+      <tr><td style="padding:.3rem 0;color:#555;border-top:1px solid #ccc;padding-top:.5rem">Date</td><td style="padding:.3rem 0;text-align:right;border-top:1px solid #ccc;padding-top:.5rem">${fmtDate(payment.createdAt)}</td></tr>
+      <tr><td style="padding:.3rem 0;color:#555">Plan</td><td style="padding:.3rem 0;text-align:right">${PLANS[payment.plan] ? PLANS[payment.plan].name : payment.plan} (30 days)</td></tr>
+      ${payment.cfPaymentId ? `<tr><td style="padding:.3rem 0;color:#555">Payment Ref</td><td style="padding:.3rem 0;text-align:right;font-size:.85rem">${escapeHtml(payment.cfPaymentId)}</td></tr>` : ''}
+      <tr><td style="padding:.3rem 0;font-weight:700;border-top:1px solid #ccc;padding-top:.5rem">Amount Paid</td><td style="padding:.3rem 0;text-align:right;font-weight:700;font-size:1.1rem;border-top:1px solid #ccc;padding-top:.5rem">${fmtRupees(payment.amountPaise)}</td></tr>
+    </table>
+    <p style="font-size:.78rem;color:#777">Amount is inclusive of all taxes. This is a computer-generated invoice.</p>
+  `;
+  const main = document.getElementById('billing-main-content');
+  main.classList.add('no-print');
+  window.onafterprint = () => { main.classList.remove('no-print'); window.onafterprint = null; };
+  window.print();
 }
 
 function copyReferralLink() {

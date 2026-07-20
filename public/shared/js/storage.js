@@ -45,3 +45,24 @@ async function uploadStudentPhoto(file, tenantId, enrollmentNumber, studentName)
   const data = await res.json();
   return { url: data.secure_url, publicId: data.public_id };
 }
+
+// Same pattern as uploadStudentPhoto, for the school's own branding logo
+// (shown in the navbar and on the login page — see applyBranding in utils.js).
+async function uploadSchoolLogo(file, tenantId) {
+  const compressed = await compressImage(file, 400, 0.85);
+  const publicId = `logo_${Date.now()}`;
+
+  const formData = new FormData();
+  formData.append('file', compressed, `${publicId}.jpg`);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('folder', `tenants/${tenantId}/branding`);
+  formData.append('public_id', publicId);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!res.ok) throw new Error('Logo upload failed. Try again.');
+  const data = await res.json();
+  return { url: data.secure_url, publicId: data.public_id };
+}

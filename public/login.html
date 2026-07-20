@@ -33,7 +33,15 @@
 
     /* ── Logo area ──────────────────────────────────────────── */
     .login-logo { margin-bottom: .9rem !important; }
-    .login-logo-icon { display: none !important; }
+    /* Hidden by default — shown only for a school that's uploaded a real
+       logo (Masters > School Settings); overridden inline via JS when
+       tenant.logoURL exists. */
+    .login-logo-icon {
+      display: none !important;
+      width: 64px; height: 64px; object-fit: contain;
+      margin: 0 auto .6rem; border-radius: var(--radius-sm);
+      background: rgba(255,255,255,.9); padding: .35rem;
+    }
     .login-logo h1 {
       color: #ede8e2 !important;
       font-size: 1.3rem !important;
@@ -228,6 +236,7 @@
 <div class="login-page">
   <div class="login-card">
     <div class="login-logo">
+      <img id="school-logo-img" class="login-logo-icon" alt="">
       <h1 id="school-name">Sarathi</h1>
     </div>
 
@@ -488,6 +497,12 @@ async function createProfile() {
     tenant = await resolveTenant();
     document.getElementById('school-name').textContent = tenant.name || 'Sarathi';
     document.title = `Login — ${tenant.name || 'Sarathi'}`;
+    if (tenant.logoURL) {
+      const logoImg = document.getElementById('school-logo-img');
+      logoImg.src = tenant.logoURL;
+      logoImg.alt = tenant.name || 'Sarathi';
+      logoImg.style.setProperty('display', 'block', 'important');
+    }
   } catch (e) {
     showError(e.message || 'School not found.');
     return;

@@ -227,7 +227,17 @@ function applyBranding(tenant) {
   const brand = document.querySelector('.navbar-brand');
   if (brand) {
     const img = brand.querySelector('img');
-    if (img) img.alt = name;
+    if (img) {
+      img.alt = name;
+      // .nav-logo-img is display:none!important by default (main.css) — no
+      // per-tenant logo existed before, so nothing was ever worth showing.
+      // Override that specifically once a school actually uploads one.
+      if (tenant && tenant.logoURL) {
+        img.src = tenant.logoURL;
+        img.style.setProperty('display', 'block', 'important');
+        img.onerror = () => img.style.removeProperty('display');
+      }
+    }
     const textNode = Array.from(brand.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
     if (textNode) textNode.textContent = ' ' + name;
     else brand.appendChild(document.createTextNode(' ' + name));

@@ -754,6 +754,17 @@ input[type="number"] { max-width: 180px; }
   border: 2px solid var(--border);
   background: var(--bg);
 }
+.school-logo, .school-logo-placeholder {
+  width: 90px; height: 90px;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--white);
+}
+.school-logo { object-fit: contain; padding: .4rem; }
+.school-logo-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-subtle); font-size: 2rem;
+}
 .student-photo-placeholder {
   width: 90px; height: 90px;
   border-radius: var(--radius);

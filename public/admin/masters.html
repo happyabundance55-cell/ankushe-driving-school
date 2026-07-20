@@ -181,8 +181,29 @@
             These details appear on receipts, government forms, and this school's login page.
           </p>
           <div class="form-group">
+            <label>School Logo</label>
+            <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+              <div id="logo-preview"><div class="school-logo-placeholder">🏫</div></div>
+              <div>
+                <input type="file" id="logo-file" accept="image/*" onchange="previewLogo()" style="display:none">
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('logo-file').click()">Choose Logo</button>
+                <div class="form-hint">Shown in the navbar and on this school's login page.</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
             <label>School Name</label>
             <input type="text" id="set-name" maxlength="80">
+          </div>
+          <div class="form-row" style="gap:.75rem">
+            <div class="form-group" style="flex:1">
+              <label>Phone</label>
+              <input type="tel" id="set-phone" placeholder="98765 43210" maxlength="10" pattern="\d{10}" title="Enter exactly 10 digits">
+            </div>
+            <div class="form-group" style="flex:1">
+              <label>Email</label>
+              <input type="email" id="set-email" placeholder="school@example.com" maxlength="120">
+            </div>
           </div>
           <div class="form-group">
             <label>Address (used on Form 15 letterhead)</label>
@@ -339,16 +360,34 @@ async function delTV(id, name) {
 }
 
 /* ─── School Settings ───────────────────────────────────────────────────── */
+let _logoFile = null;
+
 async function loadSettings() {
   _loaded.settings = true;
   const t = await getTenantSettings();
   document.getElementById('set-name').value            = t.name || '';
+  document.getElementById('set-phone').value             = (t.phone || '').replace(/^\+91/, '');
+  document.getElementById('set-email').value              = t.email || '';
   document.getElementById('set-address').value          = t.address || '';
   document.getElementById('set-prefix').value            = t.enrollmentPrefix || 'DS';
   document.getElementById('set-discount').value           = (t.referralDiscountPaise || 0) / 100;
   document.getElementById('set-reward').value              = (t.referralRewardPaise || 0) / 100;
   document.getElementById('set-session-mins').value        = t.sessionMins || 120;
   document.getElementById('set-govt-recognised').checked    = !!t.govtRecognised;
+  if (t.logoURL) {
+    document.getElementById('logo-preview').innerHTML = `<img src="${escapeHtml(t.logoURL)}" class="school-logo">`;
+  }
+}
+
+function previewLogo() {
+  const file = document.getElementById('logo-file').files[0];
+  if (!file) return;
+  _logoFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('logo-preview').innerHTML = `<img src="${e.target.result}" class="school-logo">`;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function saveSettings() {
@@ -358,8 +397,14 @@ async function saveSettings() {
   const prefix = document.getElementById('set-prefix').value.trim().toUpperCase();
   if (!name)   { errEl.textContent = 'School name is required.'; errEl.style.display = ''; return; }
   if (!prefix) { errEl.textContent = 'Enrollment prefix is required.'; errEl.style.display = ''; return; }
+  const phoneDigits = document.getElementById('set-phone').value.trim();
+  if (phoneDigits && !/^\d{10}$/.test(phoneDigits)) {
+    errEl.textContent = 'Phone must be exactly 10 digits.'; errEl.style.display = ''; return;
+  }
   const fields = {
     name,
+    phone: phoneDigits ? '+91' + phoneDigits : '',
+    email: document.getElementById('set-email').value.trim(),
     address: document.getElementById('set-address').value.trim(),
     enrollmentPrefix: prefix,
     referralDiscountPaise: Math.round((parseFloat(document.getElementById('set-discount').value) || 0) * 100),
@@ -367,12 +412,22 @@ async function saveSettings() {
     sessionMins: parseInt(document.getElementById('set-session-mins').value, 10) || 120,
     govtRecognised: document.getElementById('set-govt-recognised').checked
   };
+  const btn = document.querySelector('#panel-settings .btn-primary');
+  btn.disabled = true;
   try {
+    if (_logoFile) {
+      btn.textContent = 'Uploading logo…';
+      const uploaded = await uploadSchoolLogo(_logoFile, getTenant().id);
+      fields.logoURL = uploaded.url;
+      fields.logoPublicId = uploaded.publicId;
+      _logoFile = null;
+    }
     await updateTenantSettings(fields);
     updateTenantCache(fields);
     showToast('Settings saved.', 'success');
     applyBranding(getTenant());
   } catch(e) { errEl.textContent = e.message; errEl.style.display = ''; }
+  finally { btn.disabled = false; btn.textContent = 'Save Settings'; }
 }
 </script>
 </body>
